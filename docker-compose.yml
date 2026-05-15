@@ -1,0 +1,24 @@
+services:
+  audio:
+    build: ./services/audio-pipeline
+    container_name: presentation-coach-audio
+    ports:
+      - "8000:8000"
+    environment:
+      WHISPER_MODEL: large-v3
+      WHISPER_DEVICE: auto       # auto|cuda|cpu
+      WHISPER_COMPUTE_TYPE: auto # auto|float16|int8|float32
+    volumes:
+      # 모델 캐시 영속화 (재시작마다 8GB 재다운로드 방지)
+      - whisper-cache:/root/.cache
+    # GPU 사용 시 주석 해제 + NVIDIA Container Toolkit 설치 (Windows: WSL2 + nvidia-container-toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  whisper-cache:
