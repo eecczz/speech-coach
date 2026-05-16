@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
+import { initRigForVRM } from './retarget';
 
 export interface AvatarStage {
   scene: THREE.Scene;
@@ -16,8 +17,8 @@ export async function createAvatarStage(canvas: HTMLCanvasElement, vrmUrl: strin
   scene.background = new THREE.Color(0x101820);
 
   const camera = new THREE.PerspectiveCamera(30, canvas.width / canvas.height, 0.1, 20);
-  camera.position.set(0, 1.35, 1.6);
-  camera.lookAt(0, 1.3, 0);
+  camera.position.set(0, 1.5, 2.4);
+  camera.lookAt(0, 1.4, 0);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -38,9 +39,15 @@ export async function createAvatarStage(canvas: HTMLCanvasElement, vrmUrl: strin
     const gltf = await loader.loadAsync(vrmUrl);
     vrm = gltf.userData.vrm as VRM;
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
-    VRMUtils.removeUnnecessaryJoints(gltf.scene);
-    vrm.scene.rotation.y = Math.PI; // VRM faces away by default; turn toward camera
+    VRMUtils.combineSkeletons(gltf.scene);
+    // VRM 1.0 characters face +Z (toward camera at +Z) by default — no manual rotation.
+    // VRM 0.x characters face -Z; rotateVRM0 fixes them. It's a no-op for VRM 1.0.
+    VRMUtils.rotateVRM0(vrm);
     scene.add(vrm.scene);
+
+    // Capture rest world directions for each retargeted bone — used by the
+    // convention-independent setBoneWorldDirection in retarget.ts.
+    initRigForVRM(vrm);
   } catch (err) {
     console.warn('[avatar] VRM load failed, using primitive fallback:', err);
     const group = new THREE.Group();

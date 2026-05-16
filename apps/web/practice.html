@@ -16,12 +16,17 @@
       </header>
 
       <section class="stage">
-        <video id="cam" autoplay playsinline muted style="display:none"></video>
+        <video id="cam" autoplay playsinline muted></video>
         <canvas id="avatar" width="640" height="720"></canvas>
         <div id="status" class="status">초기화 중…</div>
+        <pre id="debug" class="debug"></pre>
       </section>
 
       <section class="controls">
+        <label class="device-pick">
+          카메라:
+          <select id="cam-select"></select>
+        </label>
         <button id="btn-start" disabled>● 녹화 시작</button>
         <button id="btn-stop" disabled>■ 정지</button>
       </section>

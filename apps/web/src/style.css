@@ -47,6 +47,35 @@ body {
   height: auto;
 }
 
+/* Small live camera preview pinned to the corner.
+   This is shown to the USER ONLY (never recorded or transmitted). */
+#cam {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 200px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #000;
+  transform: scaleX(-1); /* Mirror so user sees themselves naturally */
+}
+
+.debug {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #8eb;
+  font: 11px/1.4 ui-monospace, Consolas, monospace;
+  border-radius: 6px;
+  white-space: pre;
+  pointer-events: none;
+}
+
 .status {
   position: absolute;
   top: 12px;
@@ -62,6 +91,25 @@ body {
   display: flex;
   gap: 8px;
   margin-top: 16px;
+  align-items: center;
+}
+
+.device-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #9aa;
+}
+
+.device-pick select {
+  background: #222;
+  color: #eaeaea;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  max-width: 320px;
 }
 
 button {

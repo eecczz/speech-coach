@@ -1,5 +1,10 @@
 import { createAvatarStage } from './avatar/stage';
-import { applyFaceToVRM, applyPoseToVRM } from './avatar/retarget';
+import {
+  applyFaceToVRM,
+  applyPoseToVRM,
+  applyHandsToVRM,
+  applyFaceToFallback,
+} from './avatar/retarget';
 import { resolveAvatarUrl } from './avatar/registry';
 import { createLandmarkers, detect } from './mediapipe/landmarkers';
 import { AvatarRecorder } from './recorder/canvas-record';
@@ -7,10 +12,70 @@ import { AvatarRecorder } from './recorder/canvas-record';
 const status = document.getElementById('status') as HTMLDivElement;
 const video = document.getElementById('cam') as HTMLVideoElement;
 const canvas = document.getElementById('avatar') as HTMLCanvasElement;
+const debug = document.getElementById('debug') as HTMLPreElement;
+const camSelect = document.getElementById('cam-select') as HTMLSelectElement;
 const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
 const playback = document.getElementById('playback') as HTMLElement;
 const recorded = document.getElementById('recorded') as HTMLVideoElement;
+
+// Common virtual-camera label fragments. We avoid these on first try because
+// they often output a privacy filter or static image, not the actual user.
+const VIRTUAL_HINTS = ['virtual', 'mirametrix', 'obs', 'snap', 'nvidia broadcast', 'xsplit', 'manycam'];
+
+function isLikelyVirtual(label: string): boolean {
+  const l = label.toLowerCase();
+  return VIRTUAL_HINTS.some((h) => l.includes(h));
+}
+
+async function acquireStream(preferredDeviceId?: string): Promise<MediaStream> {
+  // First call: ask for permission with default device so labels become readable.
+  if (!preferredDeviceId) {
+    let scratch: MediaStream | null = null;
+    try {
+      scratch = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (e) {
+      throw e;
+    }
+    // Enumerate to pick a non-virtual camera if the default is virtual.
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter((d) => d.kind === 'videoinput');
+    console.log('[practice] cameras:', cams.map((c) => `${c.label}${isLikelyVirtual(c.label) ? ' [VIRTUAL]' : ''}`));
+    populateCamSelect(cams);
+
+    const currentLabel = scratch.getVideoTracks()[0]?.label ?? '';
+    if (isLikelyVirtual(currentLabel)) {
+      const real = cams.find((c) => c.label && !isLikelyVirtual(c.label));
+      if (real) {
+        console.warn(`[practice] swapping virtual cam "${currentLabel}" → "${real.label}"`);
+        scratch.getTracks().forEach((t) => t.stop());
+        camSelect.value = real.deviceId;
+        return acquireStream(real.deviceId);
+      } else {
+        console.warn('[practice] only virtual cameras found — proceeding with virtual; preview will likely be blank');
+      }
+    } else {
+      camSelect.value = cams.find((c) => c.label === currentLabel)?.deviceId ?? '';
+    }
+    return scratch;
+  }
+
+  // Targeted re-acquire with a specific device.
+  return navigator.mediaDevices.getUserMedia({
+    video: { deviceId: { exact: preferredDeviceId }, width: 640, height: 480 },
+    audio: { echoCancellation: true, noiseSuppression: true },
+  });
+}
+
+function populateCamSelect(cams: MediaDeviceInfo[]): void {
+  camSelect.innerHTML = '';
+  for (const c of cams) {
+    const opt = document.createElement('option');
+    opt.value = c.deviceId;
+    opt.textContent = `${c.label || c.deviceId.slice(0, 8)}${isLikelyVirtual(c.label) ? ' (가상)' : ''}`;
+    camSelect.appendChild(opt);
+  }
+}
 
 function setStatus(msg: string) {
   status.textContent = msg;
@@ -19,12 +84,37 @@ function setStatus(msg: string) {
 
 async function bootstrap() {
   setStatus('카메라/마이크 권한 요청 중…');
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: 640, height: 480, facingMode: 'user' },
-    audio: { echoCancellation: true, noiseSuppression: true },
-  });
+  let stream = await acquireStream();
+  const vTracks = stream.getVideoTracks();
+  const aTracks = stream.getAudioTracks();
+  const summarize = (t: MediaStreamTrack) =>
+    `label="${t.label}" enabled=${t.enabled} muted=${t.muted} state=${t.readyState}`;
+  console.log('[practice] video track:', vTracks.map(summarize).join(' | '));
+  console.log('[practice] audio track:', aTracks.map(summarize).join(' | '));
+  vTracks[0]?.addEventListener('mute', () => console.warn('[practice] video track went MUTED — camera stopped delivering frames'));
+  vTracks[0]?.addEventListener('unmute', () => console.log('[practice] video track UNMUTED — frames flowing again'));
+  if (vTracks.length === 0) {
+    throw new Error('카메라 트랙이 0개 — 권한은 통과했지만 비디오 장치가 활성화되지 않았습니다.');
+  }
+
   video.srcObject = stream;
-  await video.play();
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('비디오 메타데이터 타임아웃(10s)')), 10000);
+    video.onloadedmetadata = async () => {
+      clearTimeout(timeout);
+      try {
+        await video.play();
+        console.log('[practice] video playing', video.videoWidth, 'x', video.videoHeight);
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    };
+    video.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error('video element error'));
+    };
+  });
 
   setStatus('아바타 로딩 중…');
   const style = new URLSearchParams(location.search).get('style');
@@ -58,24 +148,80 @@ async function bootstrap() {
     playback.hidden = false;
   });
 
-  // Animation loop
+  // Animation loop with diagnostics
   let lastT = performance.now();
+  let frames = 0;
+  let lastFpsT = performance.now();
+  let fps = 0;
+  let faceCount = 0;
+  let poseCount = 0;
+  let handCount = 0;
+  let detectError: string | null = null;
+  let lastTs = -1;
+  let pixelMean = -1; // sampled brightness of current camera frame, 0..255
+
+  // Off-screen canvas for sampling video pixel content (verifies frames are non-black).
+  const probe = document.createElement('canvas');
+  probe.width = 64;
+  probe.height = 48;
+  const probeCtx = probe.getContext('2d', { willReadFrequently: true })!;
+  let probeFrame = 0;
+
   const tick = () => {
     const now = performance.now();
     const delta = (now - lastT) / 1000;
     lastT = now;
+    frames++;
+    if (now - lastFpsT >= 1000) {
+      fps = (frames * 1000) / (now - lastFpsT);
+      frames = 0;
+      lastFpsT = now;
+    }
 
-    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      const { face, pose } = detect(landmarkers, video, now);
-      if (stage.vrm) {
-        applyFaceToVRM(stage.vrm, face);
-        applyPoseToVRM(stage.vrm, pose);
-      } else if (stage.fallback) {
-        // No VRM available — rotate primitive head by jawOpen for visible feedback.
-        const jaw = face.faceBlendshapes?.[0]?.categories.find((c) => c.categoryName === 'jawOpen')?.score ?? 0;
-        const head = stage.fallback.children[0];
-        if (head) head.scale.setScalar(1 + jaw * 0.3);
+    const ready = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+
+    if (ready && vw > 0 && vh > 0) {
+      // Sample frame brightness every ~10 frames to verify camera isn't black.
+      if (probeFrame++ % 10 === 0) {
+        probeCtx.drawImage(video, 0, 0, probe.width, probe.height);
+        const data = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          sum += data[i] + data[i + 1] + data[i + 2];
+        }
+        pixelMean = sum / (data.length / 4) / 3;
       }
+
+      // MediaPipe requires strictly monotonic timestamps.
+      const ts = Math.max(Math.floor(now), lastTs + 1);
+      lastTs = ts;
+      try {
+        const { face, pose, hand } = detect(landmarkers, video, ts);
+        faceCount = face.faceLandmarks?.length ?? 0;
+        poseCount = pose.landmarks?.length ?? 0;
+        handCount = hand.landmarks?.length ?? 0;
+        if (stage.vrm) {
+          applyFaceToVRM(stage.vrm, face);
+          applyPoseToVRM(stage.vrm, pose);
+          applyHandsToVRM(stage.vrm, hand);
+        } else if (stage.fallback) {
+          applyFaceToFallback(stage.fallback, face);
+        }
+      } catch (e) {
+        detectError = e instanceof Error ? e.message : String(e);
+      }
+    }
+
+    const debugLine =
+      `fps ${fps.toFixed(0)}  video ${vw}x${vh} ready=${video.readyState} pix=${pixelMean.toFixed(0)}\n` +
+      `face=${faceCount} pose=${poseCount} hands=${handCount} vrm=${stage.vrm ? 'yes' : 'no(fallback)'}` +
+      (detectError ? `\nERR ${detectError}` : '');
+    debug.textContent = debugLine;
+    if (now - lastFpsT < 50) {
+      // ~once per second, dump to console too
+      console.log('[debug]', debugLine.replace(/\n/g, ' | '));
     }
 
     stage.render(delta);
@@ -94,5 +240,16 @@ async function bootstrap() {
 
 bootstrap().catch((err) => {
   console.error(err);
-  setStatus(`초기화 실패: ${err instanceof Error ? err.message : String(err)}`);
+  const name = err instanceof Error ? err.name : '';
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    setStatus(
+      '카메라/마이크 권한이 거부됐어요. 주소창 자물쇠 → 사이트 설정에서 허용 후 새로고침하세요.',
+    );
+  } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+    setStatus('카메라 또는 마이크 장치를 찾을 수 없어요. 연결 상태를 확인해주세요.');
+  } else if (name === 'NotReadableError') {
+    setStatus('다른 앱이 카메라를 사용 중인 것 같아요. 해당 앱을 닫고 새로고침하세요.');
+  } else {
+    setStatus(`초기화 실패: ${err instanceof Error ? err.message : String(err)}`);
+  }
 });
