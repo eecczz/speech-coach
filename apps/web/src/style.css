@@ -1,0 +1,94 @@
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+  color: #eaeaea;
+  background: #111;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#practice-root {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.practice-header h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.hint {
+  color: #9aa;
+  font-size: 13px;
+  margin: 0 0 18px;
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 540px;
+}
+
+#avatar {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #cde;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+button {
+  background: #2a4;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #333;
+  color: #777;
+  cursor: not-allowed;
+}
+
+button#btn-stop {
+  background: #a33;
+}
+
+.playback {
+  margin-top: 24px;
+}
+
+.playback video {
+  width: 100%;
+  border-radius: 8px;
+}

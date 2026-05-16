@@ -5,7 +5,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      WHISPER_MODEL: large-v3
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
       WHISPER_DEVICE: auto       # auto|cuda|cpu
       WHISPER_COMPUTE_TYPE: auto # auto|float16|int8|float32
     volumes:

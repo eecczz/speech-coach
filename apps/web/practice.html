@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>발표 코칭 — 연습</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="practice-root">
+      <header class="practice-header">
+        <h1>발표 코칭 연습</h1>
+        <p class="hint">
+          카메라가 본 영상은 브라우저 안에서만 분석되고 저장되지 않습니다. 저장되는 영상은 오른쪽 아바타뿐입니다.
+        </p>
+      </header>
+
+      <section class="stage">
+        <video id="cam" autoplay playsinline muted style="display:none"></video>
+        <canvas id="avatar" width="640" height="720"></canvas>
+        <div id="status" class="status">초기화 중…</div>
+      </section>
+
+      <section class="controls">
+        <button id="btn-start" disabled>● 녹화 시작</button>
+        <button id="btn-stop" disabled>■ 정지</button>
+      </section>
+
+      <section id="playback" class="playback" hidden>
+        <h2>녹화 다시보기 (아바타)</h2>
+        <video id="recorded" controls></video>
+      </section>
+    </main>
+
+    <script type="module" src="/src/practice.ts"></script>
+  </body>
+</html>
