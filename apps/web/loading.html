@@ -4,79 +4,98 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>분석 중 — SpeakUp</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+    </script>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main class="container loading-container">
-      <header class="loading-header">
-        <h1>분석 중</h1>
-        <p>AI가 조용히 당신의 발표를 검토하고 있습니다.</p>
-      </header>
-
-      <section class="card loading-card">
-        <div id="steps" class="loading-steps">
-          <!-- Steps will be added here dynamically -->
+    <main class="container app-shell page-center">
+      <section class="screen single-column" style="max-width: 620px; width: 100%;">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-badge">S</div>
+            <div class="brand-copy">
+              <strong>SpeakUp</strong>
+              <span>준비 중</span>
+            </div>
+          </div>
+          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
         </div>
-        <div class="loading-indicator" style="text-align: center; margin-top: 24px;">
-          <div style="width: 12px; height: 12px; background: var(--color-secondary); border-radius: 50%; margin: 0 auto; animation: pulse 1.5s ease-in-out infinite;"></div>
+
+        <div class="hero-copy">
+          <h1>분석 중</h1>
+          <p>잠시만 기다려주세요.</p>
+        </div>
+
+        <div id="steps" class="loading-stack"></div>
+
+        <div class="loading-dots" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
         </div>
       </section>
     </main>
 
-    <style>
-      .loading-container {
-        justify-content: center;
-        align-items: center;
-      }
-      .loading-header {
-        margin-bottom: 40px;
-        text-align: center;
-      }
-      .loading-card {
-        max-width: 520px;
-      }
-      .loading-steps {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        min-height: 160px;
-      }
-      @keyframes pulse {
-        0%, 100% {
-          opacity: 0.3;
-          transform: scale(1);
-        }
-        50% {
-          opacity: 1;
-          transform: scale(1.2);
-        }
-      }
-    </style>
-
     <script>
-      const steps = [
-        '시선 흐름을 분석하는 중...',
-        '발화 패턴을 이해하는 중...',
-        '발표 피드백을 생성하는 중...'
-      ];
-      const stepsEl = document.getElementById('steps');
-      let i = 0;
-      
-      function addStep() {
-        if (i >= steps.length) return;
-        const p = document.createElement('p');
-        p.className = 'step';
-        p.textContent = steps[i++];
-        stepsEl.appendChild(p);
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const params = new URLSearchParams(location.search);
+      const project = params.get('project') || '오늘의 리허설';
+      const goal = params.get('goal') || '시선 처리';
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
       }
-      
-      // Show steps sequentially
-      addStep();
-      setTimeout(() => { addStep(); }, 2000);
-      setTimeout(() => { addStep(); }, 4500);
-      
-      // After completion, redirect to result
-      setTimeout(() => { location.href = 'report.html'; }, 8000);
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
+      const steps = [
+        '시선 흐름을 확인하는 중…',
+        '발표 습관을 분석하는 중…',
+        '피드백을 정리하는 중…'
+      ];
+
+      const stepsEl = document.getElementById('steps');
+      const items = steps.map((message, index) => {
+        const row = document.createElement('div');
+        row.className = 'loading-step';
+        row.innerHTML = `<div class="step-dot"></div><strong>${message}</strong>`;
+        stepsEl.appendChild(row);
+        setTimeout(() => {
+          row.classList.add('is-visible');
+          if (index === 0) row.classList.add('is-current');
+        }, 200 + index * 1500);
+        return row;
+      });
+
+      setTimeout(() => {
+        items[0].classList.remove('is-current');
+        items[1].classList.add('is-current');
+      }, 1900);
+
+      setTimeout(() => {
+        items[1].classList.remove('is-current');
+        items[2].classList.add('is-current');
+      }, 3400);
+
+      setTimeout(() => {
+        const next = new URL('report.html', location.href);
+        next.searchParams.set('project', project);
+        next.searchParams.set('goal', goal);
+        location.href = next.toString();
+      }, 6200);
+
+      syncThemeToggle();
     </script>
   </body>
 </html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>발표 코칭 — 리포트</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+    </script>
+    <link rel="stylesheet" crossorigin href="/assets/style-B3damzLU.css">
+  </head>
+  <body>
+    <main class="container app-shell">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy">
+            <strong>SpeakUp</strong>
+            <span>리포트</span>
+          </div>
+        </div>
+        <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+      </div>
+
+      <section class="screen single-column">
+        <div class="hero-copy">
+          <h1 id="report-title">리허설 결과</h1>
+          <p id="report-focus-line">이번 리허설을 정리했어요.</p>
+        </div>
+
+        <div class="score-grid">
+          <div class="score-box">
+            <div class="label">현재 점수</div>
+            <div class="value" id="current-score">72</div>
+          </div>
+          <div class="score-box">
+            <div class="label">목표 점수</div>
+            <div class="value" id="target-score">80</div>
+          </div>
+        </div>
+
+        <div class="summary-line" id="ai-summary">
+          발표 흐름이 전보다 안정적이었고, 시선과 속도가 조금 더 자연스러워졌어요.
+        </div>
+
+        <div class="card graph-card">
+          <svg viewBox="0 0 520 220" aria-label="리허설 타임라인 그래프">
+            <path d="M28 154 C72 146, 118 124, 170 120 C228 116, 274 142, 326 116 C374 92, 424 78, 492 66" fill="none" stroke="rgba(175,203,255,0.18)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M28 154 C72 146, 118 124, 170 120 C228 116, 274 142, 326 116 C374 92, 424 78, 492 66" fill="none" stroke="#AFCBFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="28" cy="154" r="8" fill="#F3C9D0" />
+            <circle cx="170" cy="120" r="8" fill="#AFCBFF" />
+            <circle cx="326" cy="116" r="8" fill="#F6E6A8" />
+            <circle cx="492" cy="66" r="8" fill="#CDEEE7" />
+            <text x="28" y="184" font-size="12" text-anchor="middle" fill="var(--text-subtle)">오프닝</text>
+            <text x="170" y="104" font-size="12" text-anchor="middle" fill="var(--text-subtle)">중반</text>
+            <text x="326" y="146" font-size="12" text-anchor="middle" fill="var(--text-subtle)">리듬</text>
+            <text x="492" y="50" font-size="12" text-anchor="middle" fill="var(--text-subtle)">마무리</text>
+          </svg>
+        </div>
+
+        <div class="actions vertical">
+          <button id="btn-view-report" class="btn btn-primary">결과 리포트 보기</button>
+          <a class="btn" id="retry-link" href="practice.html">다시 리허설하기</a>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const params = new URLSearchParams(location.search);
+      const project = params.get('project') || '오늘의 리허설';
+      const goal = params.get('goal') || '시선 처리';
+      const goals = goal.split(',').map((item) => item.trim()).filter(Boolean);
+      const retryLink = document.getElementById('retry-link');
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
+      document.getElementById('report-title').textContent = project;
+      document.getElementById('report-focus-line').textContent =
+        `이번 리허설에서는 '${goals.join("'과 '")}'를 중심으로 봤어요.`;
+      retryLink.href = `practice.html?project=${encodeURIComponent(project)}&goal=${encodeURIComponent(goals.join(', '))}`;
+
+      document.getElementById('btn-view-report').addEventListener('click', () => {
+        alert('상세 결과 리포트는 다음 단계에서 연결될 예정입니다.');
+      });
+
+      syncThemeToggle();
+    </script>
+  </body>
+</html>

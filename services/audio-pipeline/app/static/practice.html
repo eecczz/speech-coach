@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>발표 코칭 — 연습</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+    </script>
+    <script type="module" crossorigin src="/assets/practice-m0bpfmXT.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/style-B3damzLU.css">
+  </head>
+  <body>
+    <main id="practice-root" class="app-shell">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy">
+            <strong id="page-title">Presentation #1</strong>
+            <span>발표 연습</span>
+          </div>
+        </div>
+        <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+      </div>
+
+      <section class="screen single-column">
+        <div class="hero-copy">
+          <h1>발표 영상을 업로드하세요.</h1>
+          <p>파일을 고른 뒤 바로 분석을 시작할 수 있어요.</p>
+        </div>
+
+        <div class="focus-summary" id="goal-summary"></div>
+
+        <div class="upload-box" id="dropzone">
+          <strong>영상 파일 업로드</strong>
+          <p>MP4, WebM</p>
+          <label for="upload-file">
+            <span class="btn btn-primary">파일 선택</span>
+            <input id="upload-file" type="file" accept="video/*" />
+          </label>
+        </div>
+
+        <div class="file-row">
+          <div>
+            <strong id="file-name">선택된 파일이 없어요</strong>
+            <span>업로드한 영상은 아래에서 미리볼 수 있어요.</span>
+          </div>
+          <span id="file-size">Ready</span>
+        </div>
+
+        <div class="actions vertical">
+          <button id="btn-analyze" class="btn btn-primary" disabled>분석 시작</button>
+        </div>
+
+        <section id="playback" class="playback" hidden>
+          <video id="recorded" controls></video>
+        </section>
+      </section>
+
+      <section class="card single-column">
+        <div>
+          <h2>보조 녹화 기능</h2>
+          <p class="hint">짧게 반복 연습할 때 사용할 수 있어요.</p>
+        </div>
+
+        <section class="stage">
+          <video id="cam" autoplay playsinline muted></video>
+          <canvas id="avatar" width="640" height="720"></canvas>
+          <div id="status" class="status">초기화 중…</div>
+          <pre id="debug" class="debug"></pre>
+        </section>
+
+        <section class="controls">
+          <label class="device-pick">
+            카메라
+            <select id="cam-select"></select>
+          </label>
+          <button id="btn-start" disabled>● 녹화 시작</button>
+          <button id="btn-stop" disabled>■ 정지</button>
+        </section>
+
+        <section id="review" hidden></section>
+      </section>
+    </main>
+
+    <script>
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const params = new URLSearchParams(location.search);
+      const project = params.get('project') || 'Presentation #1';
+      const goal = params.get('goal') || '시선 처리';
+      const focusItems = goal.split(',').map((item) => item.trim()).filter(Boolean);
+      document.getElementById('page-title').textContent = project;
+      document.getElementById('goal-summary').innerHTML = focusItems.map((item) => `<div class="mini-pill">${item}</div>`).join('');
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
+      const upload = document.getElementById('upload-file');
+      const analyze = document.getElementById('btn-analyze');
+      const recorded = document.getElementById('recorded');
+      const playback = document.getElementById('playback');
+      const fileName = document.getElementById('file-name');
+      const fileSize = document.getElementById('file-size');
+      const dropzone = document.getElementById('dropzone');
+
+      function updateFileState(file) {
+        if (!file) {
+          analyze.disabled = true;
+          fileName.textContent = '선택된 파일이 없어요';
+          fileSize.textContent = 'Ready';
+          return;
+        }
+
+        analyze.disabled = false;
+        fileName.textContent = file.name;
+        fileSize.textContent = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+        recorded.src = URL.createObjectURL(file);
+        playback.hidden = false;
+      }
+
+      upload.addEventListener('change', () => {
+        const file = upload.files && upload.files[0];
+        updateFileState(file);
+      });
+
+      ['dragenter', 'dragover'].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.add('is-active');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.remove('is-active');
+        });
+      });
+
+      dropzone.addEventListener('drop', (event) => {
+        const file = event.dataTransfer && event.dataTransfer.files[0];
+        if (!file) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        upload.files = transfer.files;
+        updateFileState(file);
+      });
+
+      analyze.addEventListener('click', () => {
+        const next = new URL('loading.html', location.href);
+        next.searchParams.set('project', project);
+        next.searchParams.set('goal', focusItems.join(', '));
+        location.href = next.toString();
+      });
+
+      syncThemeToggle();
+    </script>
+  </body>
+</html>

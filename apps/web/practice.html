@@ -4,39 +4,65 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>발표 코칭 — 연습</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+    </script>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main id="practice-root">
-      <header class="practice-header">
-        <h1>발표 연습</h1>
-        <p class="hint">영상을 업로드하거나 브라우저에서 실시간으로 녹화하고 AI 분석을 받으세요.</p>
-      </header>
-
-      <section class="meta">
-        <div class="presentation-info">세션: <strong id="presentation-number">Presentation #1</strong></div>
-
-        <div class="upload-panel">
-          <div style="text-align: center; margin-bottom: 12px;">
-            <p style="font-size: 1.1rem; font-weight: 600; margin: 0 0 8px 0;">발표 영상을 업로드하세요</p>
-            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">MP4, WebM 등의 비디오 파일을 선택하세요</p>
+    <main id="practice-root" class="app-shell">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy">
+            <strong id="page-title">Presentation #1</strong>
+            <span>발표 연습</span>
           </div>
-          <div style="border: 2px dashed var(--color-primary); border-radius: 16px; padding: 28px; text-align: center; background: rgba(143, 180, 255, 0.05); margin-bottom: 16px;">
-            <label for="upload-file" style="cursor: pointer; display: block;">
-              <p style="font-size: 0.95rem; color: var(--text-secondary); margin: 0;">파일을 여기에 끌어놓거나 클릭해서 선택</p>
-              <input id="upload-file" type="file" accept="video/*" style="display: none;" />
-            </label>
-          </div>
-          <div class="actions" style="justify-content: center; margin-top: 16px;">
-            <button id="btn-analyze" class="btn btn-primary" disabled style="padding: 12px 32px;">분석 시작</button>
-          </div>
-          <p class="hint" style="text-align: center;">또는 아래에서 브라우저 녹화 기능을 사용할 수 있습니다.</p>
         </div>
+        <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+      </div>
+
+      <section class="screen single-column">
+        <div class="hero-copy">
+          <h1>발표 영상을 업로드하세요.</h1>
+          <p>파일을 고른 뒤 바로 분석을 시작할 수 있어요.</p>
+        </div>
+
+        <div class="focus-summary" id="goal-summary"></div>
+
+        <div class="upload-box" id="dropzone">
+          <strong>영상 파일 업로드</strong>
+          <p>MP4, WebM</p>
+          <label for="upload-file">
+            <span class="btn btn-primary">파일 선택</span>
+            <input id="upload-file" type="file" accept="video/*" />
+          </label>
+        </div>
+
+        <div class="file-row">
+          <div>
+            <strong id="file-name">선택된 파일이 없어요</strong>
+            <span>업로드한 영상은 아래에서 미리볼 수 있어요.</span>
+          </div>
+          <span id="file-size">Ready</span>
+        </div>
+
+        <div class="actions vertical">
+          <button id="btn-analyze" class="btn btn-primary" disabled>분석 시작</button>
+        </div>
+
+        <section id="playback" class="playback" hidden>
+          <video id="recorded" controls></video>
+        </section>
       </section>
 
-      <section style="margin-top: 40px; padding: 20px; background: rgba(30, 33, 40, 0.5); border: 1px solid var(--border-color); border-radius: 16px;">
-        <h2 style="margin-top: 0; font-size: 1.1rem;">브라우저 녹화</h2>
-        <p class="hint">아바타 스타일로 실시간 피드백을 받으면서 연습합니다.</p>
+      <section class="card single-column">
+        <div>
+          <h2>보조 녹화 기능</h2>
+          <p class="hint">짧게 반복 연습할 때 사용할 수 있어요.</p>
+        </div>
 
         <section class="stage">
           <video id="cam" autoplay playsinline muted></video>
@@ -47,39 +73,98 @@
 
         <section class="controls">
           <label class="device-pick">
-            카메라:
+            카메라
             <select id="cam-select"></select>
           </label>
           <button id="btn-start" disabled>● 녹화 시작</button>
           <button id="btn-stop" disabled>■ 정지</button>
         </section>
 
-        <section id="playback" class="playback" hidden>
-          <h2>녹화 영상</h2>
-          <video id="recorded" controls></video>
-        </section>
+        <section id="review" hidden></section>
       </section>
     </main>
 
     <script>
-      // Small upload handler to integrate with existing practice workflow.
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const params = new URLSearchParams(location.search);
+      const project = params.get('project') || 'Presentation #1';
+      const goal = params.get('goal') || '시선 처리';
+      const focusItems = goal.split(',').map((item) => item.trim()).filter(Boolean);
+      document.getElementById('page-title').textContent = project;
+      document.getElementById('goal-summary').innerHTML = focusItems.map((item) => `<div class="mini-pill">${item}</div>`).join('');
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
       const upload = document.getElementById('upload-file');
       const analyze = document.getElementById('btn-analyze');
       const recorded = document.getElementById('recorded');
-      upload.addEventListener('change', async (e) => {
-        const f = upload.files && upload.files[0];
-        if (!f) { analyze.disabled = true; return; }
-        analyze.disabled = false;
-        const url = URL.createObjectURL(f);
-        if (recorded) {
-          recorded.src = url;
-          document.getElementById('playback').hidden = false;
+      const playback = document.getElementById('playback');
+      const fileName = document.getElementById('file-name');
+      const fileSize = document.getElementById('file-size');
+      const dropzone = document.getElementById('dropzone');
+
+      function updateFileState(file) {
+        if (!file) {
+          analyze.disabled = true;
+          fileName.textContent = '선택된 파일이 없어요';
+          fileSize.textContent = 'Ready';
+          return;
         }
+
+        analyze.disabled = false;
+        fileName.textContent = file.name;
+        fileSize.textContent = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+        recorded.src = URL.createObjectURL(file);
+        playback.hidden = false;
+      }
+
+      upload.addEventListener('change', () => {
+        const file = upload.files && upload.files[0];
+        updateFileState(file);
       });
+
+      ['dragenter', 'dragover'].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.add('is-active');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.remove('is-active');
+        });
+      });
+
+      dropzone.addEventListener('drop', (event) => {
+        const file = event.dataTransfer && event.dataTransfer.files[0];
+        if (!file) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        upload.files = transfer.files;
+        updateFileState(file);
+      });
+
       analyze.addEventListener('click', () => {
-        // navigate to loading step; in a fuller flow we would upload the file
-        location.href = 'loading.html';
+        const next = new URL('loading.html', location.href);
+        next.searchParams.set('project', project);
+        next.searchParams.set('goal', focusItems.join(', '));
+        location.href = next.toString();
       });
+
+      syncThemeToggle();
     </script>
     <script type="module" src="/src/practice.ts"></script>
   </body>

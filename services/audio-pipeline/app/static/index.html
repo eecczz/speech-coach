@@ -1,102 +1,58 @@
 <!doctype html>
 <html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>발표 코칭 STT 프로토타입</title>
-<style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", sans-serif; max-width: 820px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
-  h1 { font-size: 1.5rem; }
-  .row { margin: 16px 0; display: flex; align-items: center; gap: 12px; }
-  button { padding: 12px 24px; font-size: 16px; cursor: pointer; border-radius: 8px; border: 1px solid #888; background: #fff; }
-  button:hover { background: #f4f4f4; }
-  button.rec { background: #e74c3c; color: white; border-color: #e74c3c; }
-  #status { color: #666; font-size: 14px; }
-  #transcript { background: #f7f7f7; padding: 16px; border-radius: 8px; min-height: 200px; white-space: pre-wrap; font-size: 15px; }
-  .meta { font-size: 13px; color: #555; margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-  .meta span { background: #eee; padding: 3px 9px; border-radius: 4px; }
-  details { margin-top: 16px; }
-  details pre { background: #222; color: #eee; padding: 12px; overflow-x: auto; border-radius: 6px; font-size: 12px; max-height: 320px; }
-</style>
-</head>
-<body>
-<h1>발표 코칭 — STT 프로토타입</h1>
-<p>녹음 버튼을 누르고 한국어로 1~3분 발표하세요. 정지하면 서버로 업로드되어 faster-whisper(large-v3)로 전사·분석됩니다. 첫 호출은 모델 로딩 때문에 지연이 큽니다.</p>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpeakUp — 홈</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+    </script>
+    <link rel="stylesheet" crossorigin href="/assets/style-B3damzLU.css">
+  </head>
+  <body>
+    <main class="container app-shell page-center">
+      <section class="screen single-column" style="max-width: 560px; width: 100%;">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-badge">S</div>
+            <div class="brand-copy">
+              <strong>SpeakUp</strong>
+              <span>발표 연습을 더 편하게</span>
+            </div>
+          </div>
+          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+        </div>
 
-<div class="row">
-  <button id="rec">🎤 녹음 시작</button>
-  <span id="status">대기 중</span>
-</div>
+        <div class="hero-copy" style="padding-top: 8px;">
+          <h1>발표를 더 자연스럽게.</h1>
+          <p>오늘도 편하게 연습해볼까요?</p>
+        </div>
 
-<div id="transcript">(전사 결과가 여기 표시됩니다)</div>
-<div class="meta" id="meta"></div>
+        <div class="actions vertical" style="padding-top: 4px;">
+          <a class="btn btn-primary" href="create-project.html">시작하기</a>
+        </div>
+      </section>
+    </main>
 
-<details>
-  <summary>원시 응답 (JSON)</summary>
-  <pre id="raw"></pre>
-</details>
+    <script>
+      const themeToggle = document.querySelector('[data-theme-toggle]');
 
-<script>
-const recBtn = document.getElementById("rec");
-const statusEl = document.getElementById("status");
-const transcriptEl = document.getElementById("transcript");
-const metaEl = document.getElementById("meta");
-const rawEl = document.getElementById("raw");
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
+      }
 
-let mediaRecorder = null;
-let chunks = [];
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
 
-recBtn.addEventListener("click", async () => {
-  if (!mediaRecorder || mediaRecorder.state === "inactive") {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus" : "audio/webm";
-      mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
-      chunks = [];
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: mime });
-        stream.getTracks().forEach((t) => t.stop());
-        statusEl.textContent = "전사 중...";
-        const fd = new FormData();
-        fd.append("audio", blob, "rec.webm");
-        const t0 = performance.now();
-        try {
-          const r = await fetch("/transcribe", { method: "POST", body: fd });
-          const elapsedMs = performance.now() - t0;
-          const data = await r.json();
-          transcriptEl.textContent = data.full_text || "(빈 결과)";
-          rawEl.textContent = JSON.stringify(data, null, 2);
-          const rtf = data.duration_s ? (data.server_elapsed_s / data.duration_s) : 0;
-          metaEl.innerHTML =
-            `<span>언어: ${data.language} (${Math.round((data.language_probability||0)*100)}%)</span>` +
-            `<span>오디오: ${data.duration_s?.toFixed(1)}s</span>` +
-            `<span>서버 처리: ${data.server_elapsed_s?.toFixed(1)}s</span>` +
-            `<span>RTF: ${rtf.toFixed(2)}</span>` +
-            `<span>WPM: ${Math.round(data.wpm||0)}</span>` +
-            `<span>단어: ${data.word_count}</span>` +
-            `<span>왕복: ${(elapsedMs/1000).toFixed(1)}s</span>`;
-          statusEl.textContent = "완료. 다시 녹음 가능.";
-        } catch (err) {
-          statusEl.textContent = "오류: " + err.message;
-        }
-        recBtn.textContent = "🎤 녹음 시작";
-        recBtn.classList.remove("rec");
-      };
-      mediaRecorder.start();
-      statusEl.textContent = "녹음 중...";
-      recBtn.textContent = "⏹ 정지";
-      recBtn.classList.add("rec");
-    } catch (err) {
-      statusEl.textContent = "마이크 권한이 필요합니다: " + err.message;
-    }
-  } else {
-    mediaRecorder.stop();
-    statusEl.textContent = "업로드 중...";
-  }
-});
-</script>
-</body>
+      syncThemeToggle();
+    </script>
+  </body>
 </html>
