@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>프로젝트 생성 — SpeakUp</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="container create-project-container">
+      <header>
+        <h1>프로젝트 설정</h1>
+        <p>발표 정보를 입력하면 맞춤 분석이 시작됩니다.</p>
+      </header>
+
+      <section class="card create-project-card">
+        <div class="field">
+          <label for="project-name">프로젝트 이름</label>
+          <input id="project-name" placeholder="예: Q2 사업 설명회" type="text" />
+        </div>
+
+        <div class="field">
+          <label for="presentation-type">발표 유형</label>
+          <select id="presentation-type">
+            <option value="lecture">강의</option>
+            <option value="pitch">피치</option>
+            <option value="meeting">미팅/보고</option>
+            <option value="other">기타</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="goal-focus">목표 포커스</label>
+          <input id="goal-focus" placeholder="예: 눈맞춤, 발성, 시간 조절" type="text" />
+        </div>
+
+        <div class="actions" style="justify-content: center; gap: 12px; flex-direction: column; margin-top: 32px;">
+          <button id="btn-go" class="btn btn-primary" style="padding: 14px 40px; width: 100%; font-size: 1rem;">이동</button>
+          <a class="btn" href="index.html" style="padding: 12px 40px; width: 100%; text-align: center;">돌아가기</a>
+        </div>
+      </section>
+    </main>
+
+    <style>
+      .create-project-container {
+        justify-content: center;
+        align-items: center;
+      }
+      .create-project-card {
+        max-width: 500px;
+      }
+    </style>
+
+    <script>
+      document.getElementById('btn-go').addEventListener('click', () => {
+        const name = encodeURIComponent(document.getElementById('project-name').value || '프로젝트');
+        const type = encodeURIComponent(document.getElementById('presentation-type').value || 'other');
+        const goal = encodeURIComponent(document.getElementById('goal-focus').value || '');
+        location.href = `practice.html?project=${name}&type=${type}&goal=${goal}`;
+      });
+    </script>
+  </body>
+</html>

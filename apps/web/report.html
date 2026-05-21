@@ -7,9 +7,81 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main>
-      <h1>종합 리포트</h1>
-      <p>Phase 6에서 구현됩니다.</p>
+    <main class="container report-container">
+      <header>
+        <h1>분석 결과</h1>
+        <p>당신의 발표 분석이 완료되었습니다.</p>
+      </header>
+
+      <section class="card result-summary">
+        <div class="scores">
+          <div class="score-item">
+            <div class="label">현재 점수</div>
+            <div class="value" id="current-score">--</div>
+          </div>
+          <div class="score-item">
+            <div class="label">목표 점수</div>
+            <div class="value" id="target-score">80</div>
+          </div>
+        </div>
+
+        <div class="ai-summary">
+          <h2>코칭 피드백</h2>
+          <p id="ai-summary">AI가 분석한 피드백이 여기에 표시됩니다.</p>
+        </div>
+
+        <div class="timeline">
+          <h2>문제 타임라인</h2>
+          <div id="timeline-graph" class="timeline-graph">
+            <svg viewBox="0 0 400 120" style="width: 100%; height: 100%;">
+              <defs>
+                <linearGradient id="timelineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style="stop-color:#8FB4FF;stop-opacity:0.3" />
+                  <stop offset="50%" style="stop-color:#C7B8FF;stop-opacity:0.5" />
+                  <stop offset="100%" style="stop-color:#A5F0D5;stop-opacity:0.3" />
+                </linearGradient>
+              </defs>
+              <rect x="20" y="40" width="360" height="2" fill="url(#timelineGrad)" />
+              <circle cx="40" cy="40" r="6" fill="#C7B8FF" />
+              <circle cx="140" cy="40" r="6" fill="#8FB4FF" />
+              <circle cx="280" cy="40" r="6" fill="#A5F0D5" />
+              <circle cx="370" cy="40" r="6" fill="#8FB4FF" />
+              <text x="40" y="65" text-anchor="middle" font-size="11" fill="var(--text-secondary)">속도</text>
+              <text x="140" y="65" text-anchor="middle" font-size="11" fill="var(--text-secondary)">시선</text>
+              <text x="280" y="65" text-anchor="middle" font-size="11" fill="var(--text-secondary)">발음</text>
+              <text x="370" y="65" text-anchor="middle" font-size="11" fill="var(--text-secondary)">제스처</text>
+            </svg>
+          </div>
+        </div>
+
+        <div class="actions" style="flex-direction: column; margin-top: 32px;">
+          <button id="btn-view-report" class="btn btn-primary" style="width: 100%; padding: 14px 32px;">상세 리포트 보기</button>
+          <a class="btn" href="practice.html" style="width: 100%; padding: 12px 32px; text-align: center;">다시 리허설하기</a>
+        </div>
+      </section>
     </main>
+
+    <style>
+      .report-container {
+        justify-content: center;
+        align-items: flex-start;
+        padding: 32px 16px;
+      }
+      .result-summary {
+        max-width: 700px;
+      }
+      #timeline-graph {
+        height: 120px;
+      }
+    </style>
+
+    <script>
+      // Placeholder data; in real flow this would be filled from analysis results
+      document.getElementById('current-score').textContent = '72';
+      document.getElementById('ai-summary').textContent = '발화 속도가 다소 빠르고, 시선이 좌우로 자주 이동합니다. 한 문장씩 천천히 말하면서 청중의 한 지점을 3초 이상 바라보세요. 제스처도 더 의도적으로 사용하면 설득력이 높아집니다.';
+      document.getElementById('btn-view-report').addEventListener('click', () => {
+        alert('상세 리포트 페이지로 이동합니다. (아직 구현 중)');
+      });
+    </script>
   </body>
 </html>

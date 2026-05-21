@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>분석 중 — SpeakUp</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="container loading-container">
+      <header class="loading-header">
+        <h1>분석 중</h1>
+        <p>AI가 조용히 당신의 발표를 검토하고 있습니다.</p>
+      </header>
+
+      <section class="card loading-card">
+        <div id="steps" class="loading-steps">
+          <!-- Steps will be added here dynamically -->
+        </div>
+        <div class="loading-indicator" style="text-align: center; margin-top: 24px;">
+          <div style="width: 12px; height: 12px; background: var(--color-secondary); border-radius: 50%; margin: 0 auto; animation: pulse 1.5s ease-in-out infinite;"></div>
+        </div>
+      </section>
+    </main>
+
+    <style>
+      .loading-container {
+        justify-content: center;
+        align-items: center;
+      }
+      .loading-header {
+        margin-bottom: 40px;
+        text-align: center;
+      }
+      .loading-card {
+        max-width: 520px;
+      }
+      .loading-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 160px;
+      }
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 0.3;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.2);
+        }
+      }
+    </style>
+
+    <script>
+      const steps = [
+        '시선 흐름을 분석하는 중...',
+        '발화 패턴을 이해하는 중...',
+        '발표 피드백을 생성하는 중...'
+      ];
+      const stepsEl = document.getElementById('steps');
+      let i = 0;
+      
+      function addStep() {
+        if (i >= steps.length) return;
+        const p = document.createElement('p');
+        p.className = 'step';
+        p.textContent = steps[i++];
+        stepsEl.appendChild(p);
+      }
+      
+      // Show steps sequentially
+      addStep();
+      setTimeout(() => { addStep(); }, 2000);
+      setTimeout(() => { addStep(); }, 4500);
+      
+      // After completion, redirect to result
+      setTimeout(() => { location.href = 'report.html'; }, 8000);
+    </script>
+  </body>
+</html>

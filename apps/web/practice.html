@@ -9,65 +9,78 @@
   <body>
     <main id="practice-root">
       <header class="practice-header">
-        <h1>발표 코칭 연습</h1>
-        <p class="hint">
-          카메라가 본 영상은 브라우저 안에서만 분석되고 저장되지 않습니다. 저장되는 영상은 오른쪽 아바타뿐입니다.
-        </p>
+        <h1>발표 연습</h1>
+        <p class="hint">영상을 업로드하거나 브라우저에서 실시간으로 녹화하고 AI 분석을 받으세요.</p>
       </header>
 
-      <section class="stage">
-        <video id="cam" autoplay playsinline muted></video>
-        <canvas id="avatar" width="640" height="720"></canvas>
-        <div id="status" class="status">초기화 중…</div>
-        <pre id="debug" class="debug"></pre>
+      <section class="meta">
+        <div class="presentation-info">세션: <strong id="presentation-number">Presentation #1</strong></div>
+
+        <div class="upload-panel">
+          <div style="text-align: center; margin-bottom: 12px;">
+            <p style="font-size: 1.1rem; font-weight: 600; margin: 0 0 8px 0;">발표 영상을 업로드하세요</p>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">MP4, WebM 등의 비디오 파일을 선택하세요</p>
+          </div>
+          <div style="border: 2px dashed var(--color-primary); border-radius: 16px; padding: 28px; text-align: center; background: rgba(143, 180, 255, 0.05); margin-bottom: 16px;">
+            <label for="upload-file" style="cursor: pointer; display: block;">
+              <p style="font-size: 0.95rem; color: var(--text-secondary); margin: 0;">파일을 여기에 끌어놓거나 클릭해서 선택</p>
+              <input id="upload-file" type="file" accept="video/*" style="display: none;" />
+            </label>
+          </div>
+          <div class="actions" style="justify-content: center; margin-top: 16px;">
+            <button id="btn-analyze" class="btn btn-primary" disabled style="padding: 12px 32px;">분석 시작</button>
+          </div>
+          <p class="hint" style="text-align: center;">또는 아래에서 브라우저 녹화 기능을 사용할 수 있습니다.</p>
+        </div>
       </section>
 
-      <section class="controls">
-        <label class="device-pick">
-          카메라:
-          <select id="cam-select"></select>
-        </label>
-        <button id="btn-start" disabled>● 녹화 시작</button>
-        <button id="btn-stop" disabled>■ 정지</button>
-      </section>
+      <section style="margin-top: 40px; padding: 20px; background: rgba(30, 33, 40, 0.5); border: 1px solid var(--border-color); border-radius: 16px;">
+        <h2 style="margin-top: 0; font-size: 1.1rem;">브라우저 녹화</h2>
+        <p class="hint">아바타 스타일로 실시간 피드백을 받으면서 연습합니다.</p>
 
-      <section id="review" class="review" hidden>
-        <header class="review-header">
-          <div class="overall-card">
-            <div class="overall-label">종합 정확성</div>
-            <div id="review-overall" class="overall-value">—</div>
-          </div>
-          <div id="review-coach-bubble" class="coach-bubble">선택된 순간이 없습니다.</div>
-          <div id="review-coach-impact" class="impact-pill">±0</div>
-        </header>
+        <section class="stage">
+          <video id="cam" autoplay playsinline muted></video>
+          <canvas id="avatar" width="640" height="720"></canvas>
+          <div id="status" class="status">초기화 중…</div>
+          <pre id="debug" class="debug"></pre>
+        </section>
 
-        <div class="review-controls">
-          <button id="review-prev">← 이전</button>
-          <button id="review-next">다음 →</button>
-          <span class="kbd-hint">키보드 ← / → 로도 이동</span>
-        </div>
+        <section class="controls">
+          <label class="device-pick">
+            카메라:
+            <select id="cam-select"></select>
+          </label>
+          <button id="btn-start" disabled>● 녹화 시작</button>
+          <button id="btn-stop" disabled>■ 정지</button>
+        </section>
 
-        <div class="review-grid">
-          <div class="review-left">
-            <video id="recorded" controls playsinline></video>
-            <svg id="review-timeline" viewBox="0 0 800 120" preserveAspectRatio="none"></svg>
-          </div>
-          <div class="review-right">
-            <h3 class="panel-h">축별 정확성</h3>
-            <div id="review-axes" class="axes"></div>
-            <h3 class="panel-h">품질 분포</h3>
-            <div id="review-buckets" class="buckets"></div>
-          </div>
-        </div>
-
-        <h3 class="panel-h">순간 (Moments)</h3>
-        <ol id="review-moments-list" class="moments"></ol>
-
-        <h3 class="panel-h">총평</h3>
-        <p id="review-summary" class="summary"></p>
+        <section id="playback" class="playback" hidden>
+          <h2>녹화 영상</h2>
+          <video id="recorded" controls></video>
+        </section>
       </section>
     </main>
 
+    <script>
+      // Small upload handler to integrate with existing practice workflow.
+      const upload = document.getElementById('upload-file');
+      const analyze = document.getElementById('btn-analyze');
+      const recorded = document.getElementById('recorded');
+      upload.addEventListener('change', async (e) => {
+        const f = upload.files && upload.files[0];
+        if (!f) { analyze.disabled = true; return; }
+        analyze.disabled = false;
+        const url = URL.createObjectURL(f);
+        if (recorded) {
+          recorded.src = url;
+          document.getElementById('playback').hidden = false;
+        }
+      });
+      analyze.addEventListener('click', () => {
+        // navigate to loading step; in a fuller flow we would upload the file
+        location.href = 'loading.html';
+      });
+    </script>
     <script type="module" src="/src/practice.ts"></script>
   </body>
 </html>
