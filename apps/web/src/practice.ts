@@ -8,6 +8,11 @@ import {
 import { resolveAvatarUrl } from './avatar/registry';
 import { createLandmarkers, detect } from './mediapipe/landmarkers';
 import { AvatarRecorder } from './recorder/canvas-record';
+import { computeVisionFrame, resetSignalState } from './signals/compute';
+import { SilenceDetector } from './signals/silence';
+import { createAggregatorClient } from './ws/client';
+import { renderReview } from './review/render';
+import type { ComprehensiveReport } from './review/types';
 
 const status = document.getElementById('status') as HTMLDivElement;
 const video = document.getElementById('cam') as HTMLVideoElement;
@@ -16,8 +21,8 @@ const debug = document.getElementById('debug') as HTMLPreElement;
 const camSelect = document.getElementById('cam-select') as HTMLSelectElement;
 const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
-const playback = document.getElementById('playback') as HTMLElement;
 const recorded = document.getElementById('recorded') as HTMLVideoElement;
+const reviewSection = document.getElementById('review') as HTMLElement;
 
 // Common virtual-camera label fragments. We avoid these on first try because
 // they often output a privacy filter or static image, not the actual user.
@@ -128,24 +133,56 @@ async function bootstrap() {
   btnStart.disabled = false;
 
   const recorder = new AvatarRecorder();
+  const aggregator = createAggregatorClient();
   let recording = false;
+  let recordingStartTSec = 0;
+  let lastSignalSendT = 0;
+  let lastProsodySendT = 0;
+  let silenceDetector: SilenceDetector | null = null;
 
-  btnStart.addEventListener('click', () => {
-    recorder.start(canvas, stream);
-    recording = true;
+  btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
+    setStatus('세션 시작 중…');
+    const sessionId = `sess_${Date.now()}`;
+    resetSignalState();
+    await aggregator.start(sessionId);
+    recorder.start(canvas, stream);
+    silenceDetector = new SilenceDetector(stream);
+    silenceDetector.start();
+    recording = true;
+    recordingStartTSec = performance.now() / 1000;
+    lastSignalSendT = 0;
+    lastProsodySendT = 0;
     btnStop.disabled = false;
-    setStatus('녹화 중…');
+    setStatus(`녹화 중… (세션 ${sessionId})`);
   });
 
   btnStop.addEventListener('click', async () => {
     btnStop.disabled = true;
-    const rec = await recorder.stop();
     recording = false;
-    btnStart.disabled = false;
-    setStatus(`녹화 완료 — ${(rec.durationMs / 1000).toFixed(1)}s, ${(rec.blob.size / 1024 / 1024).toFixed(1)}MB`);
+    if (silenceDetector) {
+      silenceDetector.stop();
+      silenceDetector = null;
+    }
+    const rec = await recorder.stop();
+    setStatus(`녹화 종료 — ${(rec.durationMs / 1000).toFixed(1)}s, 평가 생성 중…`);
     recorded.src = rec.url;
-    playback.hidden = false;
+    const result = await aggregator.end();
+    aggregator.close();
+    if (result && (result as { report?: ComprehensiveReport }).report) {
+      const report = (result as { report: ComprehensiveReport }).report;
+      console.log('[coach] result', result);
+      reviewSection.hidden = false;
+      renderReview(report, recorded);
+      setStatus(
+        `평가 완료 — 종합 ${report.accuracy_overall?.toFixed(1) ?? '?'}점, 순간 ${report.annotated_moments?.length ?? 0}개`,
+      );
+      reviewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      console.warn('[coach] result missing or malformed', result);
+      setStatus('녹화 완료 — 평가 서버 응답 없음 (콘솔 확인)');
+    }
+    btnStart.disabled = false;
   });
 
   // Animation loop with diagnostics
@@ -208,6 +245,28 @@ async function bootstrap() {
           applyHandsToVRM(stage.vrm, hand);
         } else if (stage.fallback) {
           applyFaceToFallback(stage.fallback, face);
+        }
+
+        // Push 5fps vision signals to aggregator while recording.
+        if (recording) {
+          const sessionT = now / 1000 - recordingStartTSec;
+          if (sessionT - lastSignalSendT >= 0.2) {
+            const frame = computeVisionFrame(sessionT, face, pose, hand);
+            aggregator.sendVision(frame);
+            lastSignalSendT = sessionT;
+          }
+          // Push prosody (silence) frame every ~1s.
+          if (silenceDetector && sessionT - lastProsodySendT >= 1.0) {
+            const { silenceSeconds, rmsMean } = silenceDetector.snapshot();
+            aggregator.sendProsody({
+              t_start: lastProsodySendT,
+              t_end: sessionT,
+              silence_seconds: silenceSeconds,
+              rms_mean: rmsMean,
+            });
+            silenceDetector.resetWindow();
+            lastProsodySendT = sessionT;
+          }
         }
       } catch (e) {
         detectError = e instanceof Error ? e.message : String(e);

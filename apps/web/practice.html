@@ -31,9 +31,40 @@
         <button id="btn-stop" disabled>■ 정지</button>
       </section>
 
-      <section id="playback" class="playback" hidden>
-        <h2>녹화 다시보기 (아바타)</h2>
-        <video id="recorded" controls></video>
+      <section id="review" class="review" hidden>
+        <header class="review-header">
+          <div class="overall-card">
+            <div class="overall-label">종합 정확성</div>
+            <div id="review-overall" class="overall-value">—</div>
+          </div>
+          <div id="review-coach-bubble" class="coach-bubble">선택된 순간이 없습니다.</div>
+          <div id="review-coach-impact" class="impact-pill">±0</div>
+        </header>
+
+        <div class="review-controls">
+          <button id="review-prev">← 이전</button>
+          <button id="review-next">다음 →</button>
+          <span class="kbd-hint">키보드 ← / → 로도 이동</span>
+        </div>
+
+        <div class="review-grid">
+          <div class="review-left">
+            <video id="recorded" controls playsinline></video>
+            <svg id="review-timeline" viewBox="0 0 800 120" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="review-right">
+            <h3 class="panel-h">축별 정확성</h3>
+            <div id="review-axes" class="axes"></div>
+            <h3 class="panel-h">품질 분포</h3>
+            <div id="review-buckets" class="buckets"></div>
+          </div>
+        </div>
+
+        <h3 class="panel-h">순간 (Moments)</h3>
+        <ol id="review-moments-list" class="moments"></ol>
+
+        <h3 class="panel-h">총평</h3>
+        <p id="review-summary" class="summary"></p>
       </section>
     </main>
 

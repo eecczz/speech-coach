@@ -26,6 +26,11 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // aggregator REST — must be proxied or fetch() lands on the SPA's index.html
+      '/session': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
       '/api/coach': {
         target: 'http://localhost:8002',
         changeOrigin: true,
