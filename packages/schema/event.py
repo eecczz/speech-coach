@@ -13,6 +13,7 @@ from .report import (
     TimelineSample,
     AnnotatedMoment,
 )
+from .signal import SttSegment
 
 
 class EventKind(str, Enum):
@@ -27,6 +28,17 @@ class EventKind(str, Enum):
     CHIN_ON_HAND = "chin_on_hand"             # hand propping head (slouched / disengaged)
     EXPRESSION_FLAT = "expression_flat"
     HAND_FREEZE = "hand_freeze"
+    GESTURE_EXCESSIVE = "gesture_excessive"   # sustained sudden burst of arm/hand movement
+    # ── Phase 2 prosody events (need audio-pipeline /analyze) ──
+    MONOTONE = "monotone"                     # pitch_sd low across segments — 단조로운 톤
+    SENTENCE_TRAILING = "sentence_trailing"   # end_energy_drop repeated — 말끝 흐림
+    SLURRED_ARTICULATION = "slurred_articulation"  # low whisper word-prob avg — 발음 뭉개짐
+    # ── Domain-expansion events (situational coaching: 소개팅·고객응대·면접 등) ──
+    FACE_TOUCH = "face_touch"                 # nose/forehead/hair touching (anxiety)
+    HAND_FIDGET = "hand_fidget"               # hands clasped + restless small motion (안절부절)
+    MOTION_HESITATION = "motion_hesitation"   # repeated direction reversals (이중동작/망설임)
+    LOW_SMILE = "low_smile"                   # sustained low smile_intensity (warmth missing)
+    GAZE_WANDER = "gaze_wander"               # head-yaw sway sustained (시선 좌우 산만)
     SILENCE_LONG = "silence_long"             # silent (no speech audio) for extended period
     VOICE_FLAT = "voice_flat"
     AGGREGATE = "aggregate"
@@ -57,6 +69,10 @@ class SessionAggregates(BaseModel):
 
 class SessionBundle(BaseModel):
     session_id: str
+    # Scenario rubric id (presentation | interview | vocal | dating | ...) — coach
+    # selects the matching YAML rubric from services/coach/rubrics/ and composes the
+    # LLM prompt around it. Defaults to "presentation" for backward compatibility.
+    scenario: str = "presentation"
     duration_s: float = Field(ge=0)
     full_transcript: str
     words: List[WordSpan]
@@ -71,3 +87,8 @@ class SessionBundle(BaseModel):
     quality_buckets: QualityBuckets = Field(default_factory=QualityBuckets)
     annotated_moments: List[AnnotatedMoment] = Field(default_factory=list)
     score_timeline: List[TimelineSample] = Field(default_factory=list)
+    # STT segments (with word timestamps) — carried through to the review UI so
+    # subtitles can render synced to video, and verbal moments can highlight the
+    # specific words at fault (filler bursts, etc.). Not consumed by the LLM
+    # directly — the LLM gets `full_transcript` + `events`.
+    stt_segments: List[SttSegment] = Field(default_factory=list)

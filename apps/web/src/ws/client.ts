@@ -15,11 +15,20 @@ export interface ProsodyFrame {
   rms_mean?: number;
 }
 
+export interface AudioAnalysisResult {
+  session_id?: string;
+  full_transcript?: string;
+  stt_segments?: unknown[];
+  prosody_frames?: unknown[];
+  elapsed_s?: number;
+}
+
 export interface AggregatorClient {
-  start(sessionId: string): Promise<void>;
+  start(sessionId: string, scenario?: string): Promise<void>;
   sendVision(frame: VisionFrame): void;
   sendProsody(frame: ProsodyFrame): void;
-  end(): Promise<unknown>;
+  /** Optional audio analysis result (from /analyze) gets merged into the bundle. */
+  end(audioResult?: AudioAnalysisResult | null): Promise<unknown>;
   close(): void;
 }
 
@@ -33,14 +42,14 @@ export function createAggregatorClient(opts: {
   let sessionId: string | null = null;
 
   return {
-    async start(sid) {
+    async start(sid, scenario = 'presentation') {
       sessionId = sid;
-      // 1. POST /session/start (REST)
+      // 1. POST /session/start (REST) — scenario picks the coach's rubric YAML.
       try {
         const r = await fetch(`${httpBase}/session/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sid }),
+          body: JSON.stringify({ session_id: sid, scenario }),
         });
         if (!r.ok) console.warn('[ws] session/start failed', r.status);
       } catch (e) {
@@ -83,13 +92,23 @@ export function createAggregatorClient(opts: {
       }
     },
 
-    async end() {
+    async end(audioResult?: AudioAnalysisResult | null) {
       if (!sessionId) return null;
+      const body: Record<string, unknown> = { session_id: sessionId };
+      // Merge in audio-pipeline /analyze result so aggregator can replace the
+      // browser-side stub prosody with server-side STT + prosody.
+      if (audioResult) {
+        if (audioResult.stt_segments) body.stt_segments = audioResult.stt_segments;
+        if (audioResult.prosody_frames) body.prosody_frames = audioResult.prosody_frames;
+        if (audioResult.full_transcript) body.full_transcript = audioResult.full_transcript;
+      }
+      // /session/end can take a while when audio is included (whisper+librosa)
+      // but we already analyzed before calling this — body is just JSON ship.
       try {
         const r = await fetch(`${httpBase}/session/end`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId }),
+          body: JSON.stringify(body),
         });
         return await r.json();
       } catch (e) {

@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY packages/schema /app/packages/schema
 COPY services/coach/app /app/app
+COPY services/coach/rubrics /app/rubrics
 
 ENV PYTHONPATH=/app
 

@@ -12,7 +12,15 @@ import os
 from typing import Optional
 
 from packages.schema import SessionBundle, ComprehensiveReport
-from .prompts import SYSTEM_PROMPT, RUBRIC, OUTPUT_INSTRUCTION
+from .prompts import SYSTEM_PROMPT_BASE, OUTPUT_INSTRUCTION
+from .rubric import compose_scenario_block
+
+
+def _compose_system_prompt(scenario: str) -> str:
+    """Stitches the universal SYSTEM_PROMPT_BASE, the scenario-specific rubric block
+    (loaded from YAML), and the universal OUTPUT_INSTRUCTION into one system text.
+    Result is byte-stable per scenario → safe for prompt caching."""
+    return f"{SYSTEM_PROMPT_BASE}\n\n{compose_scenario_block(scenario)}\n{OUTPUT_INSTRUCTION}"
 
 
 def _backfill_from_bundle(report: ComprehensiveReport, bundle: SessionBundle) -> ComprehensiveReport:
@@ -41,6 +49,19 @@ def _backfill_from_bundle(report: ComprehensiveReport, bundle: SessionBundle) ->
             else:
                 merged.append(src)
         report.annotated_moments = merged
+
+    # Subtitle segments — built from the bundle's STT segments so the review UI
+    # can draw word-timed subtitles over the video. LLM never authors these.
+    from packages.schema.report import SubtitleSegment, SubtitleWord
+    report.subtitle_segments = [
+        SubtitleSegment(
+            t_start=seg.t_start,
+            t_end=seg.t_end,
+            text=seg.text,
+            words=[SubtitleWord(t_start=w.t_start, t_end=w.t_end, word=w.word) for w in seg.words],
+        )
+        for seg in bundle.stt_segments
+    ]
     return report
 
 
@@ -81,7 +102,7 @@ def generate_with_gemini(bundle: SessionBundle) -> ComprehensiveReport:
         model=GEMINI_MODEL,
         contents=_user_payload(bundle),
         config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT + "\n\n" + RUBRIC + "\n\n" + OUTPUT_INSTRUCTION,
+            system_instruction=_compose_system_prompt(bundle.scenario),
             response_mime_type="application/json",
             response_schema=ComprehensiveReport,
         ),
@@ -116,14 +137,16 @@ def generate_with_claude(bundle: SessionBundle) -> ComprehensiveReport:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
 
     client = _get_claude()
+    # System split into two blocks for caching: universal base (highly cacheable across
+    # any scenario) + scenario-specific rubric + output rules (cacheable per scenario).
     response = client.messages.parse(
         model=CLAUDE_MODEL,
         max_tokens=8000,
         system=[
-            {"type": "text", "text": SYSTEM_PROMPT},
+            {"type": "text", "text": SYSTEM_PROMPT_BASE},
             {
                 "type": "text",
-                "text": RUBRIC + "\n\n" + OUTPUT_INSTRUCTION,
+                "text": compose_scenario_block(bundle.scenario) + "\n" + OUTPUT_INSTRUCTION,
                 "cache_control": {"type": "ephemeral"},
             },
         ],

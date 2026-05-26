@@ -26,6 +26,8 @@ from .session import (
     add_vision_frame,
     add_stt_segment,
     add_prosody_frame,
+    set_stt_segments,
+    set_prosody_frames,
 )
 from .windowing import WindowingState, close_window
 from .events import build_bundle
@@ -40,16 +42,41 @@ _hud_broadcasts: list[WebSocket] = []  # clients listening for live HUD pushback
 @app.post("/session/start")
 async def session_start(payload: dict):
     sid = payload.get("session_id") or "default"
-    start_session(sid)
+    scenario = payload.get("scenario") or "presentation"
+    start_session(sid, scenario)
     windowing.flush()
-    return {"session_id": sid, "ok": True}
+    return {"session_id": sid, "scenario": scenario, "ok": True}
 
 
 @app.post("/session/end")
-async def session_end():
+async def session_end(payload: Optional[dict] = None):
+    """Build the SessionBundle and forward to coach.
+
+    Body (optional) lets the browser merge audio-pipeline /analyze results into
+    the session right before bundling — replaces stt_segments / prosody_frames
+    wholesale with the server-side transcription + prosody:
+
+        { stt_segments?: SttSegment[], prosody_frames?: ProsodyFrame[],
+          full_transcript?: str }
+    """
     s = get_session()
     if not s:
         return JSONResponse({"error": "no active session"}, status_code=404)
+
+    # Audio-pipeline result merge (Phase 2 wiring).
+    if payload:
+        raw_segs = payload.get("stt_segments")
+        if raw_segs:
+            try:
+                set_stt_segments([SttSegment(**seg) for seg in raw_segs])
+            except Exception as e:
+                print(f"[session/end] stt_segments parse failed: {e}", flush=True)
+        raw_prosody = payload.get("prosody_frames")
+        if raw_prosody:
+            try:
+                set_prosody_frames([ProsodyFrame(**fr) for fr in raw_prosody])
+            except Exception as e:
+                print(f"[session/end] prosody_frames parse failed: {e}", flush=True)
 
     # Flush any open window first.
     last = windowing.flush()

@@ -34,6 +34,11 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
+      // audio-pipeline batch analysis at session end (webm → STT + prosody)
+      '/analyze': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       '/api/coach': {
         target: 'http://localhost:8002',
         changeOrigin: true,

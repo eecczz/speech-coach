@@ -16,6 +16,9 @@ from packages.schema import VisionFrame, SttSegment, ProsodyFrame
 class Session:
     session_id: str
     started_at: float  # wall-clock seconds (server-side)
+    # Scenario id picked at /session/start — propagates to SessionBundle.scenario so
+    # the coach loads the matching rubric (presentation/interview/vocal/...).
+    scenario: str = "presentation"
     vision_frames: List[VisionFrame] = field(default_factory=list)
     stt_segments: List[SttSegment] = field(default_factory=list)
     prosody_frames: List[ProsodyFrame] = field(default_factory=list)
@@ -35,9 +38,9 @@ class Session:
 _active: Optional[Session] = None
 
 
-def start_session(session_id: str) -> Session:
+def start_session(session_id: str, scenario: str = "presentation") -> Session:
     global _active
-    _active = Session(session_id=session_id, started_at=time.time())
+    _active = Session(session_id=session_id, started_at=time.time(), scenario=scenario)
     return _active
 
 
@@ -65,3 +68,18 @@ def add_stt_segment(seg: SttSegment) -> None:
 def add_prosody_frame(frame: ProsodyFrame) -> None:
     if _active is not None:
         _active.prosody_frames.append(frame)
+
+
+def set_stt_segments(segs: List[SttSegment]) -> None:
+    """Replace STT segments wholesale — used when audio-pipeline /analyze returns
+    a complete batch transcription at session end."""
+    if _active is not None:
+        _active.stt_segments = list(segs)
+
+
+def set_prosody_frames(frames: List[ProsodyFrame]) -> None:
+    """Replace prosody frames wholesale — audio-pipeline server-side prosody is
+    authoritative; the browser-side silence frames pushed during the session are
+    discarded in favor of these (which carry pitch/intensity/articulation too)."""
+    if _active is not None:
+        _active.prosody_frames = list(frames)

@@ -157,12 +157,9 @@
         updateFileState(file);
       });
 
-      analyze.addEventListener('click', () => {
-        const next = new URL('loading.html', location.href);
-        next.searchParams.set('project', project);
-        next.searchParams.set('goal', focusItems.join(', '));
-        location.href = next.toString();
-      });
+      // The actual analyze click is handled in src/practice.ts (upload-analyze
+      // flow) — it kicks off browser-side vision replay + audio /analyze + LLM
+      // review in-place. No navigation to loading.html.
 
       syncThemeToggle();
     </script>

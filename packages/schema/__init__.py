@@ -17,6 +17,8 @@ from .report import (
     QualityBuckets,
     TimelineSample,
     AnnotatedMoment,
+    SubtitleSegment,
+    SubtitleWord,
     ComprehensiveReport,
 )
 
@@ -39,5 +41,7 @@ __all__ = [
     "QualityBuckets",
     "TimelineSample",
     "AnnotatedMoment",
+    "SubtitleSegment",
+    "SubtitleWord",
     "ComprehensiveReport",
 ]

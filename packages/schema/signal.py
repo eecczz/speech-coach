@@ -14,6 +14,9 @@ class VisionFrame(BaseModel):
     shoulder_tilt: float
     expression_diversity: float = Field(ge=0)
     hand_gesture_freq: float = Field(ge=0)
+    # Peak wrist speed (image-normalized units/sec) in the last ~1s rolling window.
+    # Spikes signal sudden burst gestures; sustained spikes become GESTURE_EXCESSIVE.
+    hand_velocity_max: float = Field(default=0.0, ge=0)
     # Head pose decomposed from MediaPipe face transformation matrix (Euler angles, degrees).
     # +pitch = looking down (chin to chest), +yaw = head turned to subject's left,
     # +roll = head tilted toward subject's right shoulder.
@@ -26,6 +29,22 @@ class VisionFrame(BaseModel):
     # at this instant; combined with audio RMS it lets us distinguish silent-mouth-open
     # vs. talking.
     mouth_open: float = Field(default=0.0, ge=0, le=1)
+
+    # ── Domain-expansion signals (드라이브: 소개팅·고객응대·면접 등 시나리오 평가 확장) ──
+    # Smile blendshape (avg of mouthSmileLeft/Right, 0..1). Warmth signal —
+    # 소개팅/고객응대 시나리오에서 강한 가중치.
+    smile_intensity: float = Field(default=0.0, ge=0, le=1)
+    # Wrist inside upper face region (cheek/nose/forehead) but NOT chin — covers
+    # nose-touching / hair-pushing / forehead-rubbing (anxiety signals).
+    face_touch_other: bool = False
+    # 0..1 — both wrists close together with small repetitive motion = 안절부절 fidget.
+    hand_fidget_score: float = Field(default=0.0, ge=0)
+    # Wrist direction reversals per second in last ~2s. High = 이중동작/망설임.
+    motion_reversal_rate: float = Field(default=0.0, ge=0)
+    # Head-yaw stddev in last ~2s (degrees). High = 시선 좌우 산만.
+    gaze_yaw_sway: float = Field(default=0.0, ge=0)
+    # Frame-to-frame blendshape change rate. High = 풍부한 표정 변화; low = 무표정.
+    expression_change_rate: float = Field(default=0.0, ge=0)
 
 
 class SttWord(BaseModel):
@@ -55,6 +74,20 @@ class ProsodyFrame(BaseModel):
     silence_seconds: float = Field(default=0.0, ge=0)
     f0_variance: Optional[float] = Field(default=None, ge=0)
     rms_mean: Optional[float] = Field(default=None, ge=0)
+    # ── Phase 2 prosody (audio-pipeline /analyze populates these per STT segment) ──
+    # Pitch standard deviation in semitones — canonical monotone metric.
+    # Low values = 단조로운 톤, high values = 표현력 있는 억양.
+    pitch_sd_semitones: Optional[float] = Field(default=None, ge=0)
+    # Pitch range (max-min) in semitones — expressiveness ceiling.
+    pitch_range_semitones: Optional[float] = Field(default=None, ge=0)
+    # Coefficient of variation of intensity envelope — 강약 다이내믹.
+    # Low = 평평한 음량, high = 다양한 강조.
+    intensity_cv: Optional[float] = Field(default=None, ge=0)
+    # Ratio of energy in the last 0.5s to segment mean. <0.7 = 말끝 흐림.
+    end_energy_drop: Optional[float] = Field(default=None, ge=0)
+    # Mean Whisper word confidence — proxy for pronunciation clarity.
+    # 0..1; <0.6 often means slurred/unclear articulation.
+    articulation_proxy: Optional[float] = Field(default=None, ge=0, le=1)
 
 
 class SignalWindow(BaseModel):

@@ -13,6 +13,8 @@ import { SilenceDetector } from './signals/silence';
 import { createAggregatorClient } from './ws/client';
 import { renderReview } from './review/render';
 import type { ComprehensiveReport } from './review/types';
+import { uploadForAnalysis } from './audio-upload';
+import { analyzeUploadedVideo } from './upload-analyze';
 
 const status = document.getElementById('status') as HTMLDivElement;
 const video = document.getElementById('cam') as HTMLVideoElement;
@@ -139,14 +141,25 @@ async function bootstrap() {
   let lastSignalSendT = 0;
   let lastProsodySendT = 0;
   let silenceDetector: SilenceDetector | null = null;
+  // Outer scope so btnStop can pass it into /analyze (associates the audio
+  // analysis with the recording session).
+  let sessionId = '';
+  // Pauses the live tick's MediaPipe + avatar pipeline while the uploaded-video
+  // flow drives the same landmarkers on its hidden probe video. Two sources
+  // calling detectForVideo with interleaved timestamps would break MP's
+  // monotonicity guard. Set false to suspend live detect, true to resume.
+  let liveDetect = true;
 
   btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
     setStatus('세션 시작 중…');
-    const sessionId = `sess_${Date.now()}`;
+    sessionId = `sess_${Date.now()}`;
+    // Scenario picks the coach rubric: presentation | interview | vocal | ...
+    // (see services/coach/rubrics/*.yaml). Default 'presentation' if no URL param.
+    const scenario = new URLSearchParams(location.search).get('scenario') || 'presentation';
     resetSignalState();
-    await aggregator.start(sessionId);
-    recorder.start(canvas, stream);
+    await aggregator.start(sessionId, scenario);
+    recorder.start(stream); // record the user's video+audio directly (avatar canvas is hidden)
     silenceDetector = new SilenceDetector(stream);
     silenceDetector.start();
     recording = true;
@@ -165,9 +178,22 @@ async function bootstrap() {
       silenceDetector = null;
     }
     const rec = await recorder.stop();
-    setStatus(`녹화 종료 — ${(rec.durationMs / 1000).toFixed(1)}s, 평가 생성 중…`);
     recorded.src = rec.url;
-    const result = await aggregator.end();
+
+    // Phase 2 audio pipeline — upload webm to /analyze (STT + prosody), merge
+    // result into the bundle via aggregator /session/end. faster-whisper +
+    // librosa on a 1-2 min clip on CPU usually 30-90s, hence the status update.
+    setStatus(`음성 분석 중… (Whisper + 운율, 최대 ~1분)`);
+    let audioResult: Awaited<ReturnType<typeof uploadForAnalysis>> | null = null;
+    try {
+      audioResult = await uploadForAnalysis(rec.blob, sessionId);
+      console.log('[audio] analyze result', audioResult);
+    } catch (e) {
+      console.warn('[audio] /analyze failed — bundling without server-side audio', e);
+    }
+
+    setStatus(`평가 생성 중…`);
+    const result = await aggregator.end(audioResult);
     aggregator.close();
     if (result && (result as { report?: ComprehensiveReport }).report) {
       const report = (result as { report: ComprehensiveReport }).report;
@@ -219,7 +245,7 @@ async function bootstrap() {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    if (ready && vw > 0 && vh > 0) {
+    if (ready && vw > 0 && vh > 0 && liveDetect) {
       // Sample frame brightness every ~10 frames to verify camera isn't black.
       if (probeFrame++ % 10 === 0) {
         probeCtx.drawImage(video, 0, 0, probe.width, probe.height);
@@ -231,7 +257,8 @@ async function bootstrap() {
         pixelMean = sum / (data.length / 4) / 3;
       }
 
-      // MediaPipe requires strictly monotonic timestamps.
+      // MediaPipe requires strictly monotonic timestamps. Skipped entirely when
+      // liveDetect=false (upload-analyze takes over the landmarker).
       const ts = Math.max(Math.floor(now), lastTs + 1);
       lastTs = ts;
       try {
@@ -295,6 +322,52 @@ async function bootstrap() {
       e.returnValue = '';
     }
   });
+
+  // ── Uploaded-video flow ──
+  // Wires #btn-analyze (in the upload section above the recording stage) to the
+  // upload-analyze pipeline. Re-uses the same landmarkers + aggregator + review
+  // section the live flow uses, so evaluation depth is identical.
+  const btnAnalyze = document.getElementById('btn-analyze') as HTMLButtonElement | null;
+  const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
+  if (btnAnalyze && uploadInput) {
+    btnAnalyze.addEventListener('click', async (ev) => {
+      // The inline JS in practice.html still navigates to loading.html — prevent
+      // that so our handler can run instead. (We also clear that handler in the
+      // HTML, but defense-in-depth is fine.)
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      const file = uploadInput.files?.[0];
+      if (!file) {
+        setStatus('영상 파일을 먼저 선택해 주세요');
+        return;
+      }
+      btnAnalyze.disabled = true;
+      btnStart.disabled = true;
+      liveDetect = false; // suspend live tick — upload flow drives the landmarker
+      const scenario =
+        new URLSearchParams(location.search).get('scenario') || 'presentation';
+      try {
+        await analyzeUploadedVideo(file, {
+          scenario,
+          landmarkers,
+          aggregator,
+          setStatus,
+          reviewSection,
+          reviewVideo: recorded,
+        });
+      } catch (e) {
+        console.error('[upload] flow failed', e);
+        setStatus(`업로드 분석 실패: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        btnAnalyze.disabled = false;
+        // Leave btnStart disabled — user is reviewing the upload result, and the
+        // aggregator session was closed by analyzeUploadedVideo. A fresh page
+        // load is the cleanest path back to a live recording.
+        // liveDetect stays false so the live camera doesn't keep firing MP detect
+        // on top of the review playback.
+      }
+    });
+  }
 }
 
 bootstrap().catch((err) => {
@@ -312,3 +385,5 @@ bootstrap().catch((err) => {
     setStatus(`초기화 실패: ${err instanceof Error ? err.message : String(err)}`);
   }
 });
+
+// (uploadForAnalysis moved to ./audio-upload.ts — shared with upload-analyze flow.)

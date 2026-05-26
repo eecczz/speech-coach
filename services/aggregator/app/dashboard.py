@@ -115,6 +115,17 @@ EVENT_QUALITY: Dict[EventKind, Tuple[str, QualityLevel, int]] = {
     EventKind.CHIN_ON_HAND: ("posture", QualityLevel.BLUNDER, -20),
     EventKind.EXPRESSION_FLAT: ("expression", QualityLevel.INACCURACY, -5),
     EventKind.HAND_FREEZE: ("gesture", QualityLevel.INACCURACY, -5),
+    EventKind.GESTURE_EXCESSIVE: ("gesture", QualityLevel.MISTAKE, -10),
+    # Domain-expansion (neutral defaults — scenario YAMLs override severities).
+    EventKind.FACE_TOUCH: ("posture", QualityLevel.INACCURACY, -5),
+    EventKind.HAND_FIDGET: ("posture", QualityLevel.INACCURACY, -5),
+    EventKind.MOTION_HESITATION: ("gesture", QualityLevel.INACCURACY, -5),
+    EventKind.LOW_SMILE: ("expression", QualityLevel.INACCURACY, -3),
+    EventKind.GAZE_WANDER: ("gaze", QualityLevel.INACCURACY, -5),
+    # Phase 2 prosody (audio-pipeline) — delivery axis 핵심 evidence.
+    EventKind.MONOTONE: ("delivery", QualityLevel.MISTAKE, -8),
+    EventKind.SENTENCE_TRAILING: ("delivery", QualityLevel.INACCURACY, -5),
+    EventKind.SLURRED_ARTICULATION: ("delivery", QualityLevel.MISTAKE, -8),
     EventKind.VOICE_FLAT: ("delivery", QualityLevel.INACCURACY, -5),
 }
 
@@ -180,17 +191,82 @@ def _flatten_events(session: Session) -> List[SemanticEvent]:
 
 
 def _positive_moments(session: Session) -> List[AnnotatedMoment]:
-    """Find 5s windows where all 4 vision axes score well — flag as excellent/brilliant."""
+    """Surface "잘한 점" moments alongside the mistakes.
+
+    Two layers:
+      1. Per-axis EXCELLENT spans — one axis at a time. Catches users who are
+         great at gaze even if their gesture is off (the all-axes check was so
+         strict it rarely fired and the user concluded "잘한건 안 잡나").
+      2. All-axes BRILLIANT windows — rarer; left in but with slightly looser
+         thresholds so they can actually trigger.
+    """
     out: List[AnnotatedMoment] = []
     vfs = session.vision_frames
     if not vfs:
         return out
 
+    out.extend(_per_axis_excellent_spans(session))
+    out.extend(_brilliant_combined_windows(session))
+    return out
+
+
+# Per-axis positive thresholds + minimum sustained duration to count as "EXCELLENT".
+# Deliberately reachable for a presenter doing ONE thing well consistently.
+_AXIS_POSITIVE = {
+    "gaze":       {"min_s": 8.0,  "predicate": lambda f: f.gaze_fixation_ratio > 0.80, "title": "안정적인 시선 유지"},
+    "posture":    {"min_s": 15.0, "predicate": lambda f: f.posture_sway < 0.04 and not f.chin_on_hand and abs(f.head_roll_deg) < 8, "title": "흔들림 없는 자세"},
+    "expression": {"min_s": 5.0,  "predicate": lambda f: getattr(f, "smile_intensity", 0.0) > 0.15 or f.expression_diversity > 1.2, "title": "풍부한 표정"},
+    "gesture":    {"min_s": 8.0,  "predicate": lambda f: GESTURE_IDEAL_LO <= f.hand_gesture_freq <= GESTURE_IDEAL_HI, "title": "적정한 손동작"},
+}
+
+
+def _per_axis_excellent_spans(session: Session) -> List[AnnotatedMoment]:
+    out: List[AnnotatedMoment] = []
+    for axis, cfg in _AXIS_POSITIVE.items():
+        pred = cfg["predicate"]  # type: ignore[assignment]
+        min_s = cfg["min_s"]
+        title = cfg["title"]
+        span_start, last_t = None, None
+        for f in session.vision_frames:
+            if pred(f):
+                if span_start is None:
+                    span_start = f.t
+                last_t = f.t
+            else:
+                if span_start is not None and last_t is not None and (last_t - span_start) >= min_s:
+                    out.append(
+                        AnnotatedMoment(
+                            t=span_start, axis=axis,
+                            quality=QualityLevel.EXCELLENT,
+                            title=title,
+                            impact=10,
+                            duration_s=last_t - span_start,
+                        )
+                    )
+                span_start, last_t = None, None
+        # Tail
+        if span_start is not None and last_t is not None and (last_t - span_start) >= min_s:
+            out.append(
+                AnnotatedMoment(
+                    t=span_start, axis=axis,
+                    quality=QualityLevel.EXCELLENT,
+                    title=title,
+                    impact=10,
+                    duration_s=last_t - span_start,
+                )
+            )
+    return out
+
+
+def _brilliant_combined_windows(session: Session) -> List[AnnotatedMoment]:
+    """All four vision axes simultaneously good in a 5s window = BRILLIANT.
+    Loosened thresholds vs. the original so it can actually trigger occasionally."""
+    out: List[AnnotatedMoment] = []
     window_s = 5.0
     cur_start = 0.0
     cur_end = window_s
     while cur_start < session.duration_s:
-        frames = [f for f in vfs if cur_start <= f.t < cur_end]
+        frames = [f for f in session.vision_frames if cur_start <= f.t < cur_end]
         if len(frames) >= 3:
             gaze = _avg(f.gaze_fixation_ratio for f in frames)
             sway = _avg(f.posture_sway for f in frames)
@@ -200,21 +276,18 @@ def _positive_moments(session: Session) -> List[AnnotatedMoment]:
             tilt = _avg(abs(f.head_roll_deg) for f in frames)
             if (
                 not chin
-                and tilt < 10
-                and gaze > 0.7
-                and sway < 0.04
-                and exp > 1.0
+                and tilt < 12
+                and gaze > 0.65
+                and sway < 0.05
+                and exp > 0.8
                 and GESTURE_IDEAL_LO <= gest <= GESTURE_IDEAL_HI
             ):
-                q = QualityLevel.BRILLIANT if (gaze > 0.85 and exp > 1.3) else QualityLevel.EXCELLENT
-                impact = 15 if q == QualityLevel.BRILLIANT else 10
                 out.append(
                     AnnotatedMoment(
-                        t=cur_start,
-                        axis="overall",
-                        quality=q,
-                        title="시선/자세/표정/제스처 모두 양호",
-                        impact=impact,
+                        t=cur_start, axis="overall",
+                        quality=QualityLevel.BRILLIANT,
+                        title="시선·자세·표정·제스처 모두 양호",
+                        impact=15,
                         duration_s=window_s,
                     )
                 )

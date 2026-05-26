@@ -1,6 +1,9 @@
-// Records the avatar canvas + mic audio into a single webm blob.
-// IMPORTANT: the raw camera MediaStreamTrack must NEVER be added to this recorder.
-// Only the canvas video track (already showing the avatar) + the mic audio track.
+// Records video + mic audio into a single webm blob.
+//
+// NOTE: this used to record the avatar CANVAS (privacy pivot — only the VRM render
+// left the browser). Evaluation now needs the real user's frames (pupils for gaze,
+// fine gestures, etc.) so we record the user's MediaStream directly. The avatar
+// canvas is hidden in CSS but still rendered live for any future use.
 
 export interface AvatarRecording {
   blob: Blob;
@@ -14,17 +17,16 @@ export class AvatarRecorder {
   private startedAt = 0;
   private stoppedResolve: ((rec: AvatarRecording) => void) | null = null;
 
-  start(canvas: HTMLCanvasElement, micStream: MediaStream): void {
-    const canvasStream = canvas.captureStream(30);
-    const audioTrack = micStream.getAudioTracks()[0];
-    if (audioTrack) canvasStream.addTrack(audioTrack);
-
+  // Records the user's MediaStream (video + audio) as-is. Pass the same stream
+  // returned by getUserMedia — both tracks travel into the recorder together so
+  // audio-video sync is whatever the browser captures, no extra plumbing needed.
+  start(userStream: MediaStream): void {
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
       ? 'video/webm;codecs=vp9,opus'
       : 'video/webm';
 
     this.chunks = [];
-    this.recorder = new MediaRecorder(canvasStream, { mimeType: mime });
+    this.recorder = new MediaRecorder(userStream, { mimeType: mime });
     this.recorder.ondataavailable = (e) => {
       if (e.data.size > 0) this.chunks.push(e.data);
     };

@@ -66,6 +66,19 @@ export interface TrainingPrescription {
   steps: string[];
 }
 
+export interface SubtitleWord {
+  t_start: number;
+  t_end: number;
+  word: string;
+}
+
+export interface SubtitleSegment {
+  t_start: number;
+  t_end: number;
+  text: string;
+  words: SubtitleWord[];
+}
+
 export interface ComprehensiveReport {
   session_id: string;
   rubric: Rubric;
@@ -80,4 +93,5 @@ export interface ComprehensiveReport {
   quality_buckets: QualityBuckets;
   annotated_moments: AnnotatedMoment[];
   score_timeline: TimelineSample[];
+  subtitle_segments?: SubtitleSegment[];
 }

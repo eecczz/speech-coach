@@ -97,6 +97,23 @@ class AnnotatedMoment(BaseModel):
     duration_s: Optional[float] = None   # span if applicable
 
 
+class SubtitleWord(BaseModel):
+    """A single STT word + its timestamp — used by the review UI to draw subtitles
+    on the video and highlight problem words (filler bursts, etc.)."""
+    t_start: float
+    t_end: float
+    word: str
+
+
+class SubtitleSegment(BaseModel):
+    """STT segment as carried into the review (subset of full SttSegment so the
+    JSON shipped to the browser stays compact and free of LLM-irrelevant fields)."""
+    t_start: float
+    t_end: float
+    text: str
+    words: List[SubtitleWord] = Field(default_factory=list)
+
+
 class ComprehensiveReport(BaseModel):
     session_id: str
     rubric: Rubric
@@ -112,3 +129,6 @@ class ComprehensiveReport(BaseModel):
     quality_buckets: QualityBuckets = Field(default_factory=QualityBuckets)
     annotated_moments: List[AnnotatedMoment] = Field(default_factory=list)
     score_timeline: List[TimelineSample] = Field(default_factory=list)
+    # STT segments (with word timestamps) for review-time subtitle rendering +
+    # word-level highlighting of verbal mistake moments. Not consumed by the LLM.
+    subtitle_segments: List[SubtitleSegment] = Field(default_factory=list)

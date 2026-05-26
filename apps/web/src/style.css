@@ -796,3 +796,421 @@ button:disabled {
     display: none;
   }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Review dashboard — rendered into #review by src/review/render.ts.
+   Self-contained markup; this stylesheet just supplies the layout and the
+   "?"/"??"/"?!" mistake-marker overlay sitting over the recorded avatar video.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+#review {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.review-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.overall-card {
+  background: var(--card-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  text-align: center;
+  min-width: 120px;
+}
+.overall-label {
+  font-size: 0.78rem;
+  color: var(--text-subtle);
+  margin-bottom: 4px;
+}
+.overall-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.coach-bubble {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.bubble-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-subtle);
+  margin-bottom: 4px;
+}
+.bubble-icon { font-size: 1rem; font-weight: 700; }
+.bubble-quality { font-weight: 650; color: var(--text); }
+.bubble-axis {
+  margin-left: auto;
+  padding: 2px 10px;
+  background: var(--bg-soft);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--text-subtle);
+}
+.bubble-title { font-weight: 650; color: var(--text); margin-bottom: 4px; }
+.bubble-comment { color: var(--text-subtle); }
+
+.impact-pill {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--card-strong);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.95rem;
+  min-width: 56px;
+  text-align: center;
+}
+
+.review-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.review-controls button { min-height: 38px; padding: 0 14px; font-size: 0.86rem; }
+.kbd-hint { color: var(--text-subtle); font-size: 0.78rem; margin-left: auto; }
+
+.review-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 16px;
+}
+.review-left,
+.review-right { display: grid; gap: 12px; align-content: start; }
+
+/* Video + mistake-marker overlay.
+   wrap is relative-positioned so absolute children (the overlay) align to the
+   video; pointer-events: none on the overlay so video controls stay clickable. */
+.video-overlay-wrap {
+  position: relative;
+  display: block;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+}
+.video-overlay-wrap video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.video-mistake-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.mistake-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 3.2rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  text-shadow:
+    0 2px 14px rgba(0, 0, 0, 0.75),
+    0 0 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  animation: mistake-marker-in 280ms ease-out;
+}
+.mistake-marker-caption {
+  font-size: 2rem;
+  padding: 4px 14px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 999px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+@keyframes mistake-marker-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Body-part highlight ring — drawn around the actual landmark causing the mistake
+   (wrist for gesture, eye for gaze, mouth for expression, etc.). */
+.mistake-circle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 3px solid;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow:
+    0 0 8px rgba(0, 0, 0, 0.55),
+    inset 0 0 10px rgba(0, 0, 0, 0.35);
+  animation: mistake-circle-in 320ms ease-out;
+}
+@keyframes mistake-circle-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* STT subtitles overlaid on the video — synced to currentTime by render.ts.
+   The active verbal moment's segment gets an outline; individual filler words
+   inside it get a stronger highlight so the mistake marker above them lines up. */
+.video-subtitle {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 12%;            /* sits above the native <video controls> bar */
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 8px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 12px;
+  color: #f5f7fb;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, outline-color 0.18s ease;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.video-subtitle.subtitle-visible {
+  opacity: 1;
+}
+.video-subtitle.subtitle-active {
+  outline-color: #f0a040;  /* matches the "mistake" marker palette */
+  background: rgba(40, 18, 0, 0.72);
+}
+.subtitle-word {
+  padding: 1px 4px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.subtitle-word.subtitle-current {
+  background: rgba(255, 255, 255, 0.16);
+}
+.subtitle-word.subtitle-filler {
+  background: rgba(240, 80, 80, 0.78);
+  color: #fff;
+  font-weight: 700;
+}
+
+[data-el="timeline"] {
+  width: 100%;
+  height: 120px;
+  background: var(--bg-soft);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+}
+.timeline-line { fill: none; stroke: var(--primary); stroke-width: 1.6; }
+.timeline-grid { stroke: var(--line); stroke-dasharray: 2 4; }
+.timeline-dot {
+  cursor: pointer;
+  stroke: var(--card);
+  stroke-width: 1.5;
+  transition: r 0.15s, stroke-width 0.15s;
+}
+.timeline-dot:hover,
+.timeline-dot.active {
+  stroke: var(--text);
+  stroke-width: 2.5;
+}
+
+.panel-h {
+  font-size: 0.86rem;
+  color: var(--text-subtle);
+  font-weight: 650;
+  margin: 0;
+}
+
+.axes { display: grid; gap: 6px; }
+.axis-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 44px auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.82rem;
+}
+.axis-label { color: var(--text); font-weight: 600; }
+.axis-bar {
+  background: var(--bg-soft);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+.axis-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--secondary), var(--primary));
+}
+.axis-score { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.axis-note { color: var(--text-subtle); font-size: 0.72rem; }
+
+.buckets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.bucket-cell {
+  background: var(--card-strong);
+  border: 1px solid var(--line);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.bucket-icon { display: block; font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
+.bucket-label { display: block; color: var(--text-subtle); font-size: 0.72rem; }
+.bucket-count {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.moments {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--card-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.moments li {
+  display: grid;
+  grid-template-columns: 54px 24px 56px 1fr 54px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+.moments li:last-child { border-bottom: none; }
+.moments li:hover { background: var(--bg-soft); }
+.moments li.active {
+  background: var(--bg-soft);
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+}
+.moment-time { color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.moment-icon { font-weight: 700; text-align: center; }
+.moment-axis { color: var(--text-subtle); font-size: 0.78rem; }
+.moment-title {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.moment-impact {
+  text-align: right;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary {
+  background: var(--card-strong);
+  border: 1px solid var(--line);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  line-height: 1.55;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 720px) {
+  .review-grid { grid-template-columns: 1fr; }
+  .review-header { grid-template-columns: auto 1fr; }
+  .impact-pill { grid-column: 1 / -1; }
+}
+
+/* Concurrent moments — same time-window, multiple simultaneous mistakes. */
+.moments li.concurrent {
+  background: linear-gradient(90deg, var(--bg-soft) 0%, transparent 60%);
+  border-left: 3px solid var(--line-strong);
+  padding-left: 9px;
+}
+.moments li.concurrent.active {
+  background: var(--bg-soft);
+  border-left-color: var(--primary);
+}
+.timeline-dot.concurrent { stroke: var(--text); stroke-width: 2; }
+
+.bubble-concurrent {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.bubble-concurrent-label {
+  font-size: 0.74rem;
+  color: var(--text-subtle);
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.bubble-concurrent-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.bubble-concurrent-item {
+  display: grid;
+  grid-template-columns: 20px auto 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  cursor: pointer;
+  font-size: 0.84rem;
+  transition: background 0.15s;
+}
+.bubble-concurrent-item:hover { background: var(--card-strong); }
+.bubble-concurrent-icon { font-weight: 700; }
+.bubble-concurrent-axis {
+  color: var(--text-subtle);
+  font-size: 0.72rem;
+  padding: 1px 8px;
+  background: var(--card);
+  border-radius: 999px;
+}
+.bubble-concurrent-title { color: var(--text); font-weight: 500; }
+.bubble-concurrent-comment {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* ─── TEMP: 평가용으로 아바타 숨기고 카메라를 메인 화면으로 ───
+   사용자가 본인 영상을 직접 보면서 평가받기 위함. 트래킹 코드는 계속 도는데
+   아바타 캔버스만 화면에서 안 보이게 함. 되돌리려면 이 블록 전체 삭제. */
+#avatar { display: none; }
+#cam {
+  position: static;
+  bottom: auto;
+  right: auto;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+}
+/* ─── /TEMP ─── */
