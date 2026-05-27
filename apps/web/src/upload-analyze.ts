@@ -82,8 +82,15 @@ export async function analyzeUploadedVideo(
     let lastReportedPct = -1;
     while (!probe.ended && !probe.paused) {
       const t = probe.currentTime;
-      // MediaPipe requires monotonic ms timestamps; floor + clamp guards seek jitter.
-      const ts = Math.max(Math.floor(t * 1000), lastTs + 1);
+      // MediaPipe needs MONOTONIC ms timestamps across the WHOLE landmarker
+      // lifetime — and the live tick that ran during the camera preview has
+      // already fed it ts ≈ performance.now() (millions). Reusing
+      // video.currentTime * 1000 here would start at 0, MP would reject every
+      // frame as "non-monotonic", try/catch would swallow the error, and
+      // aggregator would see "vision_frames=0". Solution: use wall-clock for
+      // MP ordering. The VisionFrame's `t` stays as video time so the moments
+      // align to playback position.
+      const ts = Math.max(Math.floor(performance.now()), lastTs + 1);
       lastTs = ts;
       try {
         const { face, pose, hand } = detect(ctx.landmarkers, probe, ts);

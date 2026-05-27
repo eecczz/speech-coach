@@ -225,14 +225,10 @@ export function renderReview(
   const $list     = $<HTMLOListElement>('moments-list');
   const $summary  = $<HTMLParagraphElement>('summary');
 
-  // ── Subtitle state ──
-  // segs: STT segments shipped with the report (from /analyze). May be empty
-  // when STT didn't run for this session — in that case subtitle stays hidden.
-  // activeHighlightT / activeFillers: set when a verbal moment is selected so
-  // the matching subtitle segment + filler words get highlighted under the marker.
+  // STT segments shipped with the report (from /analyze). Empty when STT didn't
+  // run for this session → subtitle stays hidden. The rAF overlay loop reads
+  // these continuously and decides per-frame which segment / words to highlight.
   const subtitleSegs: SubtitleSegment[] = report.subtitle_segments ?? [];
-  let activeHighlightT: number | null = null;
-  let activeFillerWords = new Set<string>();
 
   // Mirror the recorded blob into our self-built video element. Blob URLs can be
   // shared across multiple <video> elements safely.
@@ -267,8 +263,24 @@ export function renderReview(
 
   renderTimeline($svg, timeline, moments, (i) => selectIndex(i));
 
-  // Subtitle sync — updates on every video.timeupdate (~4Hz in most browsers,
-  // which is fine for human reading speed). Also explicitly call after seek.
+  // ── Time-driven overlay loop ──
+  // Markers stay pinned to whatever the user clicked (selectIndex sets pinnedMoments),
+  // so they remain visible while the video plays. The CIRCLES inside the markers
+  // reposition every frame to the body part's current location — so e.g. when
+  // the user clicked a "raised arm" moment and presses play, the circle stays on
+  // the moving wrist instead of disappearing the instant playback steps past the
+  // moment's time range. (The previous "active-moments-at-currentT" approach
+  // hid markers anywhere outside the moment span — markers seemed to only appear
+  // while paused.)
+  //
+  // Subtitle text follows currentT separately so the words read correctly with
+  // playback; the active-verbal *highlight* keys off pinnedMoments so it agrees
+  // with the markers above.
+  let pinnedMoments: AnnotatedMoment[] = [];
+  function pinnedVerbalMoment(): AnnotatedMoment | undefined {
+    return pinnedMoments.find((m) => m.axis === 'delivery' || m.axis === 'logic');
+  }
+
   function updateSubtitle(): void {
     if (subtitleSegs.length === 0) {
       $subtitle.classList.remove('subtitle-visible');
@@ -281,29 +293,53 @@ export function renderReview(
       $subtitle.innerHTML = '';
       return;
     }
-    // Render per-word spans so we can highlight individual words (filler etc.).
+    // Subtitle highlight follows the user's clicked context (pinned), not the
+    // current playback time. So the filler / segment outline stays consistent
+    // with the markers above the video instead of randomly jumping when
+    // playback drifts into another verbal mistake the user didn't click.
+    const verbal = pinnedVerbalMoment();
+    const explicitFillers = verbal ? extractFillerTerms(verbal) : new Set<string>();
     const html = seg.words.length > 0
       ? seg.words.map((w) => {
           const norm = normalizeWord(w.word);
-          const isFiller = activeFillerWords.has(norm) ||
-            (activeHighlightT !== null && KOREAN_FILLERS.has(norm));
-          // Always highlight fillers when their segment is the active verbal moment;
-          // otherwise just plain word.
-          const filler = activeFillerWords.has(norm) ? ' subtitle-filler' : '';
-          // Visually mark the currently spoken word (where playback is).
+          const isFiller = !!verbal && (explicitFillers.has(norm) || KOREAN_FILLERS.has(norm));
+          const filler = isFiller ? ' subtitle-filler' : '';
           const current = t >= w.t_start && t <= w.t_end + 0.1 ? ' subtitle-current' : '';
-          void isFiller; // unused if no active highlight, kept for future per-word marker positioning
           return `<span class="subtitle-word${filler}${current}">${escapeHtml(w.word)}</span>`;
         }).join(' ')
       : `<span>${escapeHtml(seg.text)}</span>`;
-    const activeOnThis =
-      activeHighlightT !== null && seg.t_start <= activeHighlightT && activeHighlightT <= seg.t_end + 0.5;
+    const activeOnThis = !!verbal;
     $subtitle.className = `video-subtitle subtitle-visible${activeOnThis ? ' subtitle-active' : ''}`;
     $subtitle.innerHTML = html;
   }
-  $video.addEventListener('timeupdate', updateSubtitle);
-  $video.addEventListener('seeked', updateSubtitle);
-  $video.addEventListener('loadedmetadata', updateSubtitle);
+
+  function renderOverlayAtCurrentTime(): void {
+    const t = $video.currentTime;
+    // Pinned moments stay on-screen; circles re-pick body coords for THIS instant.
+    renderMistakeMarkers($overlay, pinnedMoments, t);
+    updateSubtitle();
+  }
+
+  // rAF loop runs only while playing — paused video uses one-shot updates so
+  // we don't burn cycles forever.
+  let rafId = 0;
+  function rafLoop(): void {
+    renderOverlayAtCurrentTime();
+    if (!$video.paused && !$video.ended) {
+      rafId = requestAnimationFrame(rafLoop);
+    }
+  }
+  $video.addEventListener('play', () => {
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(rafLoop);
+  });
+  $video.addEventListener('pause', () => {
+    cancelAnimationFrame(rafId);
+    renderOverlayAtCurrentTime();
+  });
+  $video.addEventListener('ended', () => cancelAnimationFrame(rafId));
+  $video.addEventListener('seeked', renderOverlayAtCurrentTime);
+  $video.addEventListener('loadedmetadata', renderOverlayAtCurrentTime);
 
   $prev.addEventListener('click', () => selectIndex(current - 1));
   $next.addEventListener('click', () => selectIndex(current + 1));
@@ -348,8 +384,15 @@ export function renderReview(
       if (dot) dot.classList.add('concurrent');
     }
 
+    // Pin this moment + its concurrents so the overlay keeps them on-screen
+    // while the user plays through the section. The rAF loop will continually
+    // refresh circle positions to wherever the body parts are at the current
+    // frame, so the marker tracks the speaker instead of staying static.
+    pinnedMoments = concurrentIdx.map((j) => moments[j]);
+
     // Seek video and PAUSE — user explicitly asked for this; auto-play scrubs past
-    // the mistake before they can inspect it.
+    // the mistake before they can inspect it. The rAF overlay loop picks up the
+    // new currentTime via the 'seeked' event and re-renders markers/subtitle.
     try {
       $video.pause();
       $video.currentTime = m.t;
@@ -357,24 +400,6 @@ export function renderReview(
     if (videoEl !== $video) {
       try { videoEl.pause(); videoEl.currentTime = m.t; } catch { /* ignore */ }
     }
-
-    // Render markers for ALL concurrent moments — multiple icons at different
-    // positions so simultaneous mistakes (silence + raised arm + …) all show at once.
-    renderMistakeMarkers($overlay, concurrentIdx.map((j) => moments[j]));
-
-    // Subtitle highlight — if any concurrent moment is verbal (delivery/logic),
-    // mark its segment as active and extract filler words for stronger highlight.
-    const verbal = concurrentIdx.map((j) => moments[j]).find(
-      (mm) => mm.axis === 'delivery' || mm.axis === 'logic',
-    );
-    if (verbal) {
-      activeHighlightT = verbal.t;
-      activeFillerWords = extractFillerTerms(verbal);
-    } else {
-      activeHighlightT = null;
-      activeFillerWords = new Set();
-    }
-    updateSubtitle();
 
     $prev.disabled = clamped === 0;
     $next.disabled = clamped === moments.length - 1;
@@ -408,13 +433,19 @@ const SIZE_FACE_PX = 70;
 const SIZE_HAND_PX = 90;
 const SIZE_HEAD_PX = 120;
 
-function pickMarkerTargets(m: AnnotatedMoment): CircleTarget[] {
-  const snap = getLandmarksAtTime(m.t, 1.5);
+function pickMarkerTargets(m: AnnotatedMoment, currentT: number): CircleTarget[] {
+  // Use the CURRENT video time for landmark lookup — that way the circle tracks
+  // the body part as the video plays, instead of freezing at the moment's start.
+  // tolSec is small (0.4) so we only show the marker when the body actually IS
+  // there at that instant; if landmarks went missing (off-camera), the marker
+  // hides until the body is back.
+  const snap = getLandmarksAtTime(currentT, 0.4);
   if (snap) {
     const t = targetsForAxis(m, snap);
     if (t.length > 0) return t;
   }
-  // No landmark coverage for this t → fall back to the generic axis region.
+  // No fresh landmark at this instant → fall back to the generic axis region so
+  // the marker still appears (better than disappearing if MP missed one frame).
   const [px, py] = AXIS_REGION[m.axis] ?? AXIS_REGION.gesture;
   return [{ x: px / 100, y: py / 100, sizePx: SIZE_HAND_PX }];
 }
@@ -499,7 +530,11 @@ function targetsForAxis(m: AnnotatedMoment, snap: LandmarkSnapshot): CircleTarge
   return [];
 }
 
-function renderMistakeMarkers(overlay: HTMLDivElement, moments: AnnotatedMoment[]): void {
+function renderMistakeMarkers(
+  overlay: HTMLDivElement,
+  moments: AnnotatedMoment[],
+  currentT: number,
+): void {
   overlay.innerHTML = '';
   if (moments.length === 0) return;
 
@@ -508,7 +543,7 @@ function renderMistakeMarkers(overlay: HTMLDivElement, moments: AnnotatedMoment[
     if (!mark) continue;
     const meta = QUALITY_META[m.quality];
     const isCaption = m.axis === 'delivery' || m.axis === 'logic';
-    const targets = pickMarkerTargets(m);
+    const targets = pickMarkerTargets(m, currentT);
 
     for (const t of targets) {
       // Body-part axes draw a circle around the actual landmark; caption-strip
