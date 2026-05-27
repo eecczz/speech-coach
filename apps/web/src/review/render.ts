@@ -434,27 +434,61 @@ interface Bone {
 function pickBones(m: AnnotatedMoment, snap: LandmarkSnapshot): Bone[] {
   const titleHas = (s: string) => m.title.includes(s);
 
+  // Helpers to bundle related bones — drawing multiple connected segments
+  // makes the highlight read as "this whole limb / face region" instead of a
+  // floating fragment the user has to mentally connect to anything.
+  const fullArm = (
+    side: 'left' | 'right',
+    p: NonNullable<LandmarkSnapshot['pose']>,
+  ): Bone[] =>
+    side === 'left'
+      ? [
+          { a: p.leftShoulder, b: p.leftElbow },
+          { a: p.leftElbow, b: p.leftWrist },
+        ]
+      : [
+          { a: p.rightShoulder, b: p.rightElbow },
+          { a: p.rightElbow, b: p.rightWrist },
+        ];
+
+  const upperBodyFrame = (p: NonNullable<LandmarkSnapshot['pose']>): Bone[] => {
+    const midShoulder: Point2 = {
+      x: (p.leftShoulder.x + p.rightShoulder.x) / 2,
+      y: (p.leftShoulder.y + p.rightShoulder.y) / 2,
+    };
+    return [
+      { a: p.head, b: midShoulder },               // spine
+      { a: p.leftShoulder, b: p.rightShoulder },   // shoulder line
+    ];
+  };
+
+  const faceFrame = (f: NonNullable<LandmarkSnapshot['face']>): Bone[] => {
+    // Eye line + a short nose-to-mouth vertical so the face region reads as a
+    // small "skeleton" instead of a single horizontal stroke.
+    const eyeMid: Point2 = {
+      x: (f.leftEye.x + f.rightEye.x) / 2,
+      y: (f.leftEye.y + f.rightEye.y) / 2,
+    };
+    return [
+      { a: f.leftEye, b: f.rightEye },
+      { a: eyeMid, b: f.mouth },
+    ];
+  };
+
   switch (m.axis) {
     case 'gaze':
     case 'expression':
-      if (snap.face) {
-        // Eye-line for both — distinguishable by colour + glyph from the marker.
-        return [{ a: snap.face.leftEye, b: snap.face.rightEye }];
-      }
+      if (snap.face) return faceFrame(snap.face);
       break;
 
     case 'gesture':
       if (snap.pose) {
-        // We don't know which hand was the issue — draw both forearms.
-        return [
-          { a: snap.pose.leftElbow, b: snap.pose.leftWrist },
-          { a: snap.pose.rightElbow, b: snap.pose.rightWrist },
-        ];
+        // Both full arms — issue could be either, drawing both gives context.
+        return [...fullArm('left', snap.pose), ...fullArm('right', snap.pose)];
       }
       break;
 
     case 'posture': {
-      // Hand-touching-face → forearm of the touching hand.
       const wristToFace =
         (titleHas('턱 괴기') || titleHas('얼굴') || titleHas('만지')) && snap.face && snap.pose;
       if (wristToFace && snap.face && snap.pose) {
@@ -462,37 +496,21 @@ function pickBones(m: AnnotatedMoment, snap: LandmarkSnapshot): Bone[] {
         const fcy = (snap.face.bbox.minY + snap.face.bbox.maxY) / 2;
         const lwd = Math.hypot(snap.pose.leftWrist.x - fcx, snap.pose.leftWrist.y - fcy);
         const rwd = Math.hypot(snap.pose.rightWrist.x - fcx, snap.pose.rightWrist.y - fcy);
-        return lwd < rwd
-          ? [{ a: snap.pose.leftElbow, b: snap.pose.leftWrist }]
-          : [{ a: snap.pose.rightElbow, b: snap.pose.rightWrist }];
+        // Full arm of the touching side — shoulder→elbow→wrist so the user
+        // sees which whole arm is up against the face, not just the forearm.
+        return fullArm(lwd < rwd ? 'left' : 'right', snap.pose);
       }
-      // Fidget — both forearms.
       if (titleHas('만지작') && snap.pose) {
-        return [
-          { a: snap.pose.leftElbow, b: snap.pose.leftWrist },
-          { a: snap.pose.rightElbow, b: snap.pose.rightWrist },
-        ];
+        return [...fullArm('left', snap.pose), ...fullArm('right', snap.pose)];
       }
-      // Generic posture / head tilt / sway / nodding → spine line (head → mid-shoulders).
-      if (snap.pose) {
-        const midShoulder: Point2 = {
-          x: (snap.pose.leftShoulder.x + snap.pose.rightShoulder.x) / 2,
-          y: (snap.pose.leftShoulder.y + snap.pose.rightShoulder.y) / 2,
-        };
-        return [{ a: snap.pose.head, b: midShoulder }];
-      }
+      // Generic posture: upper-body skeleton frame (spine + shoulder line).
+      if (snap.pose) return upperBodyFrame(snap.pose);
       break;
     }
 
     case 'overall':
-      // BRILLIANT "all axes good" — green spine line as the positive marker.
-      if (snap.pose) {
-        const midShoulder: Point2 = {
-          x: (snap.pose.leftShoulder.x + snap.pose.rightShoulder.x) / 2,
-          y: (snap.pose.leftShoulder.y + snap.pose.rightShoulder.y) / 2,
-        };
-        return [{ a: snap.pose.head, b: midShoulder }];
-      }
+      // BRILLIANT — green upper-body skeleton as the positive marker.
+      if (snap.pose) return upperBodyFrame(snap.pose);
       break;
 
     // Verbal axes leave the body alone; subtitle row handles them.
@@ -502,6 +520,12 @@ function pickBones(m: AnnotatedMoment, snap: LandmarkSnapshot): Bone[] {
   return [];
 }
 
+// When two markers' centroids land within this distance (in % of video) we
+// stagger the second one horizontally so the glyphs don't overlap and
+// become unreadable.
+const GLYPH_COLLISION_PCT = 5;
+const GLYPH_STAGGER_PCT = 7;
+
 function renderMistakeMarkers(
   overlay: HTMLDivElement,
   moments: AnnotatedMoment[],
@@ -510,10 +534,9 @@ function renderMistakeMarkers(
   overlay.innerHTML = '';
   if (moments.length === 0) return;
 
-  // One SVG layer for all bone lines — using viewBox 0..100 with
-  // preserveAspectRatio="none" lets us specify coords as % of the video.
-  // vector-effect=non-scaling-stroke keeps line thickness consistent even as
-  // the SVG stretches to non-square aspect ratios.
+  // One SVG layer for all bone lines. viewBox 0..100 with preserveAspectRatio=
+  // "none" lets us specify coords as % of the video; vector-effect=
+  // non-scaling-stroke keeps line thickness consistent across video aspects.
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('class', 'mistake-bone-layer');
@@ -521,6 +544,7 @@ function renderMistakeMarkers(
   svg.setAttribute('preserveAspectRatio', 'none');
 
   const snap = getLandmarksAtTime(currentT, 0.4);
+  const placedGlyphs: Array<{ x: number; y: number }> = [];
 
   for (const m of moments) {
     const mark = QUALITY_MARK[m.quality];
@@ -528,37 +552,32 @@ function renderMistakeMarkers(
     const meta = QUALITY_META[m.quality];
     const isCaption = m.axis === 'delivery' || m.axis === 'logic';
 
-    // Caption-strip moments: skip bone, drop glyph in the verbal strip.
+    // Caption-strip moments: skip bone, drop glyph in the verbal strip
+    // (subtitle word-highlight does the precise "what word" pinpointing).
     if (isCaption) {
       const [px, py] = AXIS_REGION[m.axis] ?? AXIS_REGION.gesture;
+      const positioned = staggerIfNeeded(px, py, placedGlyphs);
       const el = document.createElement('div');
       el.className = `mistake-marker mistake-${m.quality} mistake-marker-caption`;
       el.textContent = mark;
       el.style.color = meta.color;
-      el.style.left = `${px}%`;
-      el.style.top = `${py}%`;
+      el.style.left = `${positioned.x}%`;
+      el.style.top = `${positioned.y}%`;
       overlay.appendChild(el);
       continue;
     }
 
     const bones = snap ? pickBones(m, snap) : [];
 
-    if (bones.length === 0) {
-      // No landmark coverage at this instant — fall back to the generic axis
-      // region so the user still sees *something* (better than dropping the
-      // moment entirely the moment MP misses one frame).
-      const [px, py] = AXIS_REGION[m.axis] ?? AXIS_REGION.gesture;
-      const el = document.createElement('div');
-      el.className = `mistake-marker mistake-${m.quality}`;
-      el.textContent = mark;
-      el.style.color = meta.color;
-      el.style.left = `${px}%`;
-      el.style.top = `${py}%`;
-      overlay.appendChild(el);
-      continue;
-    }
+    // No landmark coverage at this instant → skip the on-video marker. The
+    // moment is still in the bubble + list + timeline; we just don't dump a
+    // misleading "?" at a default coordinate (was producing stray icons above
+    // the speaker's head when MediaPipe missed a frame, or when the video
+    // had B-roll / title cards without a visible person).
+    if (bones.length === 0) continue;
 
-    // Draw each bone as a coloured line on the SVG layer.
+    // Draw every bone in the group — full arm for gesture, upper-body frame
+    // (spine + shoulder line) for posture, eye-line + nose-to-mouth for face.
     for (const bone of bones) {
       const line = document.createElementNS(svgNS, 'line');
       line.setAttribute('x1', String(bone.a.x * 100));
@@ -573,23 +592,50 @@ function renderMistakeMarkers(
       svg.appendChild(line);
     }
 
-    // Glyph sits at the midpoint of the first (primary) bone.
-    const primary = bones[0];
-    const mx = ((primary.a.x + primary.b.x) / 2) * 100;
-    const my = ((primary.a.y + primary.b.y) / 2) * 100;
+    // Glyph sits at the centroid of all bone midpoints — a stable anchor
+    // even when the group has 2-4 segments (full arm vs spine etc.).
+    let cx = 0, cy = 0;
+    for (const b of bones) {
+      cx += (b.a.x + b.b.x) / 2;
+      cy += (b.a.y + b.b.y) / 2;
+    }
+    cx = (cx / bones.length) * 100;
+    cy = (cy / bones.length) * 100;
+    const positioned = staggerIfNeeded(cx, cy, placedGlyphs);
     const el = document.createElement('div');
     el.className = `mistake-marker mistake-${m.quality}`;
     el.textContent = mark;
     el.style.color = meta.color;
-    el.style.left = `${mx}%`;
-    // Lift the glyph slightly above the line so the bone remains readable.
-    el.style.top = `calc(${my}% - 24px)`;
+    el.style.left = `${positioned.x}%`;
+    // Lift the glyph slightly above the centroid so it sits above the bones.
+    el.style.top = `calc(${positioned.y}% - 24px)`;
     overlay.appendChild(el);
   }
 
-  // Append SVG once after collecting all bones (avoids z-order surprises with
-  // marker glyphs — divs naturally render on top of the earlier SVG sibling).
+  // Append SVG once after collecting all bones (avoids z-order surprises —
+  // marker divs naturally render on top of the earlier SVG sibling).
   overlay.insertBefore(svg, overlay.firstChild);
+}
+
+/** Returns a non-overlapping position for a new glyph; shifts right in
+ *  GLYPH_STAGGER_PCT increments until clear of already-placed positions
+ *  (up to 6 collisions — beyond that we accept the overlap). */
+function staggerIfNeeded(
+  x: number,
+  y: number,
+  placed: Array<{ x: number; y: number }>,
+): { x: number; y: number } {
+  let adjusted = x;
+  for (let i = 0; i < 6; i++) {
+    const collides = placed.some(
+      (p) => Math.abs(p.x - adjusted) < GLYPH_COLLISION_PCT &&
+             Math.abs(p.y - y) < GLYPH_COLLISION_PCT,
+    );
+    if (!collides) break;
+    adjusted += GLYPH_STAGGER_PCT;
+  }
+  placed.push({ x: adjusted, y });
+  return { x: adjusted, y };
 }
 
 function renderAxes(el: HTMLElement, axes: AxisAccuracy[]): void {
