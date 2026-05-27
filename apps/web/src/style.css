@@ -927,7 +927,9 @@ button:disabled {
     0 2px 14px rgba(0, 0, 0, 0.75),
     0 0 4px rgba(0, 0, 0, 0.6);
   pointer-events: none;
-  animation: mistake-marker-in 280ms ease-out;
+  /* No entrance animation — rAF re-renders the overlay every frame, so a fade-in
+     would restart constantly and the marker would sit at opacity ≈0 during
+     playback. Show instantly. */
 }
 .mistake-marker-caption {
   font-size: 2rem;
@@ -935,10 +937,6 @@ button:disabled {
   background: rgba(0, 0, 0, 0.55);
   border-radius: 999px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-}
-@keyframes mistake-marker-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
-  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 /* Body-part highlight ring — drawn around the actual landmark causing the mistake
@@ -952,11 +950,8 @@ button:disabled {
   box-shadow:
     0 0 8px rgba(0, 0, 0, 0.55),
     inset 0 0 10px rgba(0, 0, 0, 0.35);
-  animation: mistake-circle-in 320ms ease-out;
-}
-@keyframes mistake-circle-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
-  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  /* Same reason as .mistake-marker — entrance animation would restart 60×/sec
+     during playback and the circle would never become visible. */
 }
 
 /* STT subtitles overlaid on the video — synced to currentTime by render.ts.
