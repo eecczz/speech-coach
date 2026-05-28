@@ -530,10 +530,13 @@ button.btn-primary {
   text-align: left;
 }
 
-.scenario-card i {
+.scenario-card i,
+.scenario-card svg {
   grid-row: span 2;
   color: var(--ink-muted);
   font-size: 1.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
 }
 
 .scenario-card strong {
@@ -660,6 +663,52 @@ button.btn-primary {
   border: 0.5px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--card);
+}
+
+.upload-option {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  cursor: pointer;
+}
+
+.upload-option-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.upload-option-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.upload-option-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.upload-option-copy strong {
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.upload-option-copy span {
+  color: var(--ink-muted);
+  font-size: 0.74rem;
+  line-height: 1.55;
 }
 
 .feedback-stream {
