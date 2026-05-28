@@ -39,6 +39,16 @@
             <button type="button" class="tab" data-mode="upload">영상 업로드</button>
           </div>
 
+          <label class="upload-option" for="avatar-review-toggle">
+            <span class="upload-option-check">
+              <input id="avatar-review-toggle" type="checkbox" />
+            </span>
+            <span class="upload-option-copy">
+              <strong>아바타 모드 켜기</strong>
+              <span>내 모습 대신 아바타로 다시 볼 수 있어요.</span>
+            </span>
+          </label>
+
           <section class="stage practice-video">
             <video id="cam" autoplay playsinline muted></video>
             <canvas id="avatar" width="640" height="720"></canvas>
@@ -83,16 +93,6 @@
               </div>
               <span id="file-size">—</span>
             </div>
-
-            <label class="upload-option" for="avatar-review-toggle">
-              <span class="upload-option-check">
-                <input id="avatar-review-toggle" type="checkbox" />
-              </span>
-              <span class="upload-option-copy">
-                <strong>아바타 모드 켜기</strong>
-                <span>내 모습 대신 아바타로 다시 볼 수 있어요.</span>
-              </span>
-            </label>
 
             <section id="playback" class="playback" hidden>
               <video id="recorded" controls></video>
