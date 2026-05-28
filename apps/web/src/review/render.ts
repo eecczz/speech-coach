@@ -12,7 +12,7 @@ import type {
   AxisAccuracy,
   SubtitleSegment,
 } from './types';
-import { getLandmarksAtTime, type LandmarkSnapshot } from '../signals/compute';
+import { getLandmarksAtTime, type LandmarkSnapshot, type Point2 } from '../signals/compute';
 
 // Korean filler dictionary — mirrors services/audio-pipeline/app/prosody.py so
 // the subtitle can highlight the same words that triggered FILLER_BURST events.
@@ -414,121 +414,117 @@ export function renderReview(
   };
 }
 
-// ── Mistake markers over the video ──
-// Each moment gets a circle drawn on the *actual body part* causing the issue
-// (looked up from the per-frame LandmarkSnapshot buffer that compute.ts kept
-// during the session), plus a "?"/"??"/"?!" glyph above it. Verbal axes use the
-// caption-strip fallback until Phase C wires word-level subtitle highlighting.
+// ── Bone-based mistake / positive markers over the video ──
 //
-// Falls back to AXIS_REGION (generic body area) when no landmark snapshot
-// exists for the moment's time — e.g. the user was off-camera in that window.
+// Chess.com-style: draw a coloured LINE along the body part causing the moment
+// (forearm for gesture, eye-line for gaze, spine for posture, …). The line's
+// colour encodes the moment's quality — green for excellent/brilliant, orange
+// for mistake, red for blunder, etc. A "?"/"??"/"?!"/"★" glyph sits at the
+// midpoint of the (first) bone so the user reads both the *what* and the *where*
+// in a single glance.
+//
+// Verbal axes (delivery / logic) still use the caption-strip fallback below the
+// video — subtitle word-highlight handles those.
 
-interface CircleTarget {
-  x: number;          // image-normalized [0..1] — same coord space as MediaPipe
-  y: number;
-  sizePx: number;     // CSS px diameter
+interface Bone {
+  a: Point2;
+  b: Point2;
 }
 
-const SIZE_FACE_PX = 70;
-const SIZE_HAND_PX = 90;
-const SIZE_HEAD_PX = 120;
-
-function pickMarkerTargets(m: AnnotatedMoment, currentT: number): CircleTarget[] {
-  // Use the CURRENT video time for landmark lookup — that way the circle tracks
-  // the body part as the video plays, instead of freezing at the moment's start.
-  // tolSec is small (0.4) so we only show the marker when the body actually IS
-  // there at that instant; if landmarks went missing (off-camera), the marker
-  // hides until the body is back.
-  const snap = getLandmarksAtTime(currentT, 0.4);
-  if (snap) {
-    const t = targetsForAxis(m, snap);
-    if (t.length > 0) return t;
-  }
-  // No fresh landmark at this instant → fall back to the generic axis region so
-  // the marker still appears (better than disappearing if MP missed one frame).
-  const [px, py] = AXIS_REGION[m.axis] ?? AXIS_REGION.gesture;
-  return [{ x: px / 100, y: py / 100, sizePx: SIZE_HAND_PX }];
-}
-
-function targetsForAxis(m: AnnotatedMoment, snap: LandmarkSnapshot): CircleTarget[] {
+function pickBones(m: AnnotatedMoment, snap: LandmarkSnapshot): Bone[] {
   const titleHas = (s: string) => m.title.includes(s);
+
+  // Helpers to bundle related bones — drawing multiple connected segments
+  // makes the highlight read as "this whole limb / face region" instead of a
+  // floating fragment the user has to mentally connect to anything.
+  const fullArm = (
+    side: 'left' | 'right',
+    p: NonNullable<LandmarkSnapshot['pose']>,
+  ): Bone[] =>
+    side === 'left'
+      ? [
+          { a: p.leftShoulder, b: p.leftElbow },
+          { a: p.leftElbow, b: p.leftWrist },
+        ]
+      : [
+          { a: p.rightShoulder, b: p.rightElbow },
+          { a: p.rightElbow, b: p.rightWrist },
+        ];
+
+  const upperBodyFrame = (p: NonNullable<LandmarkSnapshot['pose']>): Bone[] => {
+    const midShoulder: Point2 = {
+      x: (p.leftShoulder.x + p.rightShoulder.x) / 2,
+      y: (p.leftShoulder.y + p.rightShoulder.y) / 2,
+    };
+    return [
+      { a: p.head, b: midShoulder },               // spine
+      { a: p.leftShoulder, b: p.rightShoulder },   // shoulder line
+    ];
+  };
+
+  const faceFrame = (f: NonNullable<LandmarkSnapshot['face']>): Bone[] => {
+    // Eye line + a short nose-to-mouth vertical so the face region reads as a
+    // small "skeleton" instead of a single horizontal stroke.
+    const eyeMid: Point2 = {
+      x: (f.leftEye.x + f.rightEye.x) / 2,
+      y: (f.leftEye.y + f.rightEye.y) / 2,
+    };
+    return [
+      { a: f.leftEye, b: f.rightEye },
+      { a: eyeMid, b: f.mouth },
+    ];
+  };
 
   switch (m.axis) {
     case 'gaze':
-      if (snap.face) {
-        return [{
-          x: (snap.face.leftEye.x + snap.face.rightEye.x) / 2,
-          y: (snap.face.leftEye.y + snap.face.rightEye.y) / 2,
-          sizePx: SIZE_FACE_PX,
-        }];
-      }
-      break;
-
     case 'expression':
-      if (snap.face) {
-        return [{
-          x: snap.face.mouth.x,
-          y: snap.face.mouth.y,
-          sizePx: SIZE_FACE_PX,
-        }];
-      }
+      if (snap.face) return faceFrame(snap.face);
       break;
 
     case 'gesture':
       if (snap.pose) {
-        // For gesture issues we don't know which hand — circle both.
-        return [
-          { x: snap.pose.leftWrist.x, y: snap.pose.leftWrist.y, sizePx: SIZE_HAND_PX },
-          { x: snap.pose.rightWrist.x, y: snap.pose.rightWrist.y, sizePx: SIZE_HAND_PX },
-        ];
+        // Both full arms — issue could be either, drawing both gives context.
+        return [...fullArm('left', snap.pose), ...fullArm('right', snap.pose)];
       }
       break;
 
     case 'posture': {
-      // Hand-touching-face events: circle the wrist nearest the face center.
-      const wristToFace = (titleHas('턱 괴기') || titleHas('얼굴') || titleHas('만지')) && snap.face && snap.pose;
+      const wristToFace =
+        (titleHas('턱 괴기') || titleHas('얼굴') || titleHas('만지')) && snap.face && snap.pose;
       if (wristToFace && snap.face && snap.pose) {
         const fcx = (snap.face.bbox.minX + snap.face.bbox.maxX) / 2;
         const fcy = (snap.face.bbox.minY + snap.face.bbox.maxY) / 2;
         const lwd = Math.hypot(snap.pose.leftWrist.x - fcx, snap.pose.leftWrist.y - fcy);
         const rwd = Math.hypot(snap.pose.rightWrist.x - fcx, snap.pose.rightWrist.y - fcy);
-        const w = lwd < rwd ? snap.pose.leftWrist : snap.pose.rightWrist;
-        return [{ x: w.x, y: w.y, sizePx: SIZE_HAND_PX }];
+        // Full arm of the touching side — shoulder→elbow→wrist so the user
+        // sees which whole arm is up against the face, not just the forearm.
+        return fullArm(lwd < rwd ? 'left' : 'right', snap.pose);
       }
-      // Fidget — both wrists.
       if (titleHas('만지작') && snap.pose) {
-        return [
-          { x: snap.pose.leftWrist.x, y: snap.pose.leftWrist.y, sizePx: SIZE_HAND_PX },
-          { x: snap.pose.rightWrist.x, y: snap.pose.rightWrist.y, sizePx: SIZE_HAND_PX },
-        ];
+        return [...fullArm('left', snap.pose), ...fullArm('right', snap.pose)];
       }
-      // Generic posture / head tilt / sway / nodding — circle the head/upper torso.
-      if (snap.pose) {
-        const cx = (snap.pose.leftShoulder.x + snap.pose.rightShoulder.x) / 2;
-        const cy = (snap.pose.head.y + (snap.pose.leftShoulder.y + snap.pose.rightShoulder.y) / 2) / 2;
-        return [{ x: cx, y: cy, sizePx: SIZE_HEAD_PX }];
-      }
+      // Generic posture: upper-body skeleton frame (spine + shoulder line).
+      if (snap.pose) return upperBodyFrame(snap.pose);
       break;
     }
 
     case 'overall':
-      // Positive "all axes good" moments — soft glow at face center.
-      if (snap.face) {
-        return [{
-          x: (snap.face.bbox.minX + snap.face.bbox.maxX) / 2,
-          y: (snap.face.bbox.minY + snap.face.bbox.maxY) / 2,
-          sizePx: SIZE_HEAD_PX,
-        }];
-      }
+      // BRILLIANT — green upper-body skeleton as the positive marker.
+      if (snap.pose) return upperBodyFrame(snap.pose);
       break;
 
-    // Verbal axes (delivery, logic) — leave to caption-strip fallback for now;
-    // Phase C will render subtitles with word-level highlighting underneath.
+    // Verbal axes leave the body alone; subtitle row handles them.
     default:
       break;
   }
   return [];
 }
+
+// When two markers' centroids land within this distance (in % of video) we
+// stagger the second one horizontally so the glyphs don't overlap and
+// become unreadable.
+const GLYPH_COLLISION_PCT = 5;
+const GLYPH_STAGGER_PCT = 7;
 
 function renderMistakeMarkers(
   overlay: HTMLDivElement,
@@ -538,38 +534,108 @@ function renderMistakeMarkers(
   overlay.innerHTML = '';
   if (moments.length === 0) return;
 
+  // One SVG layer for all bone lines. viewBox 0..100 with preserveAspectRatio=
+  // "none" lets us specify coords as % of the video; vector-effect=
+  // non-scaling-stroke keeps line thickness consistent across video aspects.
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('class', 'mistake-bone-layer');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  const snap = getLandmarksAtTime(currentT, 0.4);
+  const placedGlyphs: Array<{ x: number; y: number }> = [];
+
   for (const m of moments) {
     const mark = QUALITY_MARK[m.quality];
     if (!mark) continue;
     const meta = QUALITY_META[m.quality];
     const isCaption = m.axis === 'delivery' || m.axis === 'logic';
-    const targets = pickMarkerTargets(m, currentT);
 
-    for (const t of targets) {
-      // Body-part axes draw a circle around the actual landmark; caption-strip
-      // axes (verbal) skip the circle and just place the glyph at the caption row.
-      if (!isCaption) {
-        const circle = document.createElement('div');
-        circle.className = `mistake-circle mistake-${m.quality}`;
-        circle.style.left = `${t.x * 100}%`;
-        circle.style.top = `${t.y * 100}%`;
-        circle.style.width = `${t.sizePx}px`;
-        circle.style.height = `${t.sizePx}px`;
-        circle.style.borderColor = meta.color;
-        overlay.appendChild(circle);
-      }
-      // Glyph: above the circle for body parts, sitting in the caption strip otherwise.
+    // Caption-strip moments: skip bone, drop glyph in the verbal strip
+    // (subtitle word-highlight does the precise "what word" pinpointing).
+    if (isCaption) {
+      const [px, py] = AXIS_REGION[m.axis] ?? AXIS_REGION.gesture;
+      const positioned = staggerIfNeeded(px, py, placedGlyphs);
       const el = document.createElement('div');
-      el.className = `mistake-marker mistake-${m.quality}${isCaption ? ' mistake-marker-caption' : ''}`;
+      el.className = `mistake-marker mistake-${m.quality} mistake-marker-caption`;
       el.textContent = mark;
       el.style.color = meta.color;
-      el.style.left = `${t.x * 100}%`;
-      // Position glyph just above the circle (or at the point itself for caption).
-      const yOffsetPx = isCaption ? 0 : (t.sizePx / 2 + 14);
-      el.style.top = isCaption ? `${t.y * 100}%` : `calc(${t.y * 100}% - ${yOffsetPx}px)`;
+      el.style.left = `${positioned.x}%`;
+      el.style.top = `${positioned.y}%`;
       overlay.appendChild(el);
+      continue;
     }
+
+    const bones = snap ? pickBones(m, snap) : [];
+
+    // No landmark coverage at this instant → skip the on-video marker. The
+    // moment is still in the bubble + list + timeline; we just don't dump a
+    // misleading "?" at a default coordinate (was producing stray icons above
+    // the speaker's head when MediaPipe missed a frame, or when the video
+    // had B-roll / title cards without a visible person).
+    if (bones.length === 0) continue;
+
+    // Draw every bone in the group — full arm for gesture, upper-body frame
+    // (spine + shoulder line) for posture, eye-line + nose-to-mouth for face.
+    for (const bone of bones) {
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', String(bone.a.x * 100));
+      line.setAttribute('y1', String(bone.a.y * 100));
+      line.setAttribute('x2', String(bone.b.x * 100));
+      line.setAttribute('y2', String(bone.b.y * 100));
+      line.setAttribute('stroke', meta.color);
+      line.setAttribute('stroke-width', '8');
+      line.setAttribute('stroke-linecap', 'round');
+      line.setAttribute('vector-effect', 'non-scaling-stroke');
+      line.setAttribute('class', `mistake-bone mistake-${m.quality}`);
+      svg.appendChild(line);
+    }
+
+    // Glyph sits at the centroid of all bone midpoints — a stable anchor
+    // even when the group has 2-4 segments (full arm vs spine etc.).
+    let cx = 0, cy = 0;
+    for (const b of bones) {
+      cx += (b.a.x + b.b.x) / 2;
+      cy += (b.a.y + b.b.y) / 2;
+    }
+    cx = (cx / bones.length) * 100;
+    cy = (cy / bones.length) * 100;
+    const positioned = staggerIfNeeded(cx, cy, placedGlyphs);
+    const el = document.createElement('div');
+    el.className = `mistake-marker mistake-${m.quality}`;
+    el.textContent = mark;
+    el.style.color = meta.color;
+    el.style.left = `${positioned.x}%`;
+    // Lift the glyph slightly above the centroid so it sits above the bones.
+    el.style.top = `calc(${positioned.y}% - 24px)`;
+    overlay.appendChild(el);
   }
+
+  // Append SVG once after collecting all bones (avoids z-order surprises —
+  // marker divs naturally render on top of the earlier SVG sibling).
+  overlay.insertBefore(svg, overlay.firstChild);
+}
+
+/** Returns a non-overlapping position for a new glyph; shifts right in
+ *  GLYPH_STAGGER_PCT increments until clear of already-placed positions
+ *  (up to 6 collisions — beyond that we accept the overlap). */
+function staggerIfNeeded(
+  x: number,
+  y: number,
+  placed: Array<{ x: number; y: number }>,
+): { x: number; y: number } {
+  let adjusted = x;
+  for (let i = 0; i < 6; i++) {
+    const collides = placed.some(
+      (p) => Math.abs(p.x - adjusted) < GLYPH_COLLISION_PCT &&
+             Math.abs(p.y - y) < GLYPH_COLLISION_PCT,
+    );
+    if (!collides) break;
+    adjusted += GLYPH_STAGGER_PCT;
+  }
+  placed.push({ x: adjusted, y });
+  return { x: adjusted, y };
 }
 
 function renderAxes(el: HTMLElement, axes: AxisAccuracy[]): void {

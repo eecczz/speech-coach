@@ -3,23 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>코칭 노트 - SpeakUp</title>
+    <title>AI 코칭 리포트 - SpeakUp</title>
     <script>
       const savedTheme = localStorage.getItem('speakup-theme');
       document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
-    <link rel="stylesheet" crossorigin href="/assets/brand-C5xyIzSu.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/brand-IyGxakMu.css">
   </head>
   <body>
-    <main class="container app-shell narrow-app">
-      <div class="topbar">
-        <div class="brand">
+    <main class="container app-shell">
+      <div class="topbar app-nav">
+        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
           <div class="brand-badge">S</div>
           <div class="brand-copy">
             <strong>SpeakUp</strong>
-            <span>코칭 노트</span>
+            <span>AI 코칭 리포트</span>
           </div>
-        </div>
+        </a>
         <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
       </div>
 
@@ -29,53 +32,109 @@
         <span class="is-current">3 코칭</span>
       </section>
 
-      <section class="screen single-column">
-        <div class="hero-copy compact-copy">
-          <h1 id="report-title">오늘의 리허설</h1>
-          <p id="report-focus-line">다음 연습에서 챙기면 좋은 포인트를 정리했어요.</p>
-        </div>
-
-        <div class="score-grid">
-          <div class="score-box accent-blue">
-            <div class="label">오늘의 흐름</div>
-            <div class="value" id="current-score">72</div>
+      <section class="report-layout">
+        <section class="screen report-main">
+          <div class="report-header">
+            <div>
+              <span class="eyebrow">Session Report</span>
+              <h1 id="report-title">AI 코칭 리포트</h1>
+              <p id="report-focus-line">오늘 연습에서 말 속도, 시선, 논리 흐름을 중심으로 돌아봤어요.</p>
+            </div>
+            <div class="score-grid report-scores">
+              <div class="score-box">
+                <div class="label">이번 점수</div>
+                <div class="value" id="current-score">82</div>
+              </div>
+              <div class="score-box">
+                <div class="label">목표</div>
+                <div class="value" id="target-score">88</div>
+              </div>
+              <div class="score-box">
+                <div class="label">Delta</div>
+                <div class="value positive">+6</div>
+              </div>
+            </div>
           </div>
-          <div class="score-box accent-mint">
-            <div class="label">다음 목표</div>
-            <div class="value" id="target-score">80</div>
+
+          <div class="ai-feedback-box" id="ai-summary">
+            전체 구조는 안정적이에요. 다만 중반 이후 말 속도가 빨라지는 구간이 있어, 핵심 문장 앞에 짧은 쉼을 넣어보세요.
           </div>
-        </div>
 
-        <div class="summary-line" id="ai-summary">
-          전체 흐름은 안정적이었고, 잠깐 속도가 빨라지는 구간만 다음 리허설에서 천천히 다시 연습해보면 좋아요.
-        </div>
+          <section class="card chart-card">
+            <div class="panel-title">
+              <h2>발화 점수 타임라인</h2>
+              <span>꼭지점을 클릭하면 해당 순간의 영상을 볼 수 있어요.</span>
+            </div>
+            <canvas id="score-chart" height="132"></canvas>
+          </section>
 
-        <div class="card graph-card">
-          <svg viewBox="0 0 520 220" aria-label="리허설 흐름 그래프">
-            <path d="M28 154 C72 146, 118 124, 170 120 C228 116, 274 142, 326 116 C374 92, 424 78, 492 66" fill="none" stroke="#AFCBFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-            <circle cx="28" cy="154" r="8" fill="#F3C9D0" />
-            <circle cx="170" cy="120" r="8" fill="#CDEEE7" />
-            <circle cx="326" cy="116" r="8" fill="#F6E6A8" />
-            <circle cx="492" cy="66" r="8" fill="#AFCBFF" />
-            <text x="28" y="184" font-size="12" text-anchor="middle" fill="var(--text-subtle)">시작</text>
-            <text x="170" y="104" font-size="12" text-anchor="middle" fill="var(--text-subtle)">중반</text>
-            <text x="326" y="146" font-size="12" text-anchor="middle" fill="var(--text-subtle)">전환</text>
-            <text x="492" y="50" font-size="12" text-anchor="middle" fill="var(--text-subtle)">마무리</text>
-          </svg>
-        </div>
+          <section class="axis-cards">
+            <div class="score-box">
+              <div class="label">Verbal</div>
+              <div class="value">84</div>
+              <div class="meter"><i style="width: 84%"></i></div>
+              <p>핵심 메시지 연결이 안정적이에요.</p>
+            </div>
+            <div class="score-box">
+              <div class="label">Prosody</div>
+              <div class="value">78</div>
+              <div class="meter"><i style="width: 78%"></i></div>
+              <p>중반 속도만 조금 낮춰보세요.</p>
+            </div>
+            <div class="score-box">
+              <div class="label">Non-verbal</div>
+              <div class="value">81</div>
+              <div class="meter"><i style="width: 81%"></i></div>
+              <p>시선 흐름이 점점 안정되고 있어요.</p>
+            </div>
+          </section>
+        </section>
 
-        <div class="actions vertical">
-          <button id="btn-view-report" class="btn btn-primary">코칭 노트 보기</button>
-          <a class="btn" id="retry-link" href="practice.html">다시 연습하기</a>
-        </div>
+        <aside class="side-panel">
+          <section class="card moments-panel">
+            <h2>주의 구간</h2>
+            <button type="button" class="moment-card" data-open-modal>
+              <span>00:42</span><strong>속도가 빨라졌어요</strong><em>주의</em>
+            </button>
+            <button type="button" class="moment-card is-good" data-open-modal>
+              <span>01:18</span><strong>좋은 쉼이 있었어요</strong><em>좋음</em>
+            </button>
+            <button type="button" class="moment-card" data-open-modal>
+              <span>02:05</span><strong>필러 표현이 반복됐어요</strong><em>흐름</em>
+            </button>
+          </section>
+          <section class="card next-goals">
+            <h2>다음 세션 목표</h2>
+            <ol>
+              <li>핵심 문장 앞에 1초 쉬기</li>
+              <li>필러 표현을 두 번 이하로 줄이기</li>
+              <li>마무리 문장을 더 천천히 말하기</li>
+            </ol>
+            <div class="actions vertical">
+              <a class="btn btn-primary" id="retry-link" href="practice.html">다시 연습하기</a>
+              <a class="btn btn-ghost" href="dashboard.html">성장 트래킹 보기</a>
+            </div>
+          </section>
+        </aside>
       </section>
+
+      <dialog class="video-modal" id="video-modal">
+        <button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button>
+        <div class="modal-video">00:42</div>
+        <div class="modal-controls">
+          <button type="button" class="btn btn-ghost">10초 전</button>
+          <button type="button" class="btn btn-primary">재생</button>
+          <button type="button" class="btn btn-ghost">10초 후</button>
+        </div>
+        <div class="ai-feedback-box">이 구간은 말 속도가 조금 빨라졌어요. 다음에는 핵심 문장 앞에 짧은 쉼을 넣어보세요.</div>
+      </dialog>
     </main>
 
     <script>
       const themeToggle = document.querySelector('[data-theme-toggle]');
       const params = new URLSearchParams(location.search);
       const project = params.get('project') || '오늘의 말하기 연습';
-      const goal = params.get('goal') || '시선';
+      const goal = params.get('goal') || '말 속도';
       const goals = goal.split(',').map((item) => item.trim()).filter(Boolean);
       const retryLink = document.getElementById('retry-link');
 
@@ -97,8 +156,37 @@
         `이번 연습에서는 ${goals.join(', ')}를 중심으로 돌아봤어요.`;
       retryLink.href = `practice.html?project=${encodeURIComponent(project)}&goal=${encodeURIComponent(goals.join(', '))}`;
 
-      document.getElementById('btn-view-report').addEventListener('click', () => {
-        alert('상세 코칭 노트는 연습 화면에서 코칭이 끝난 뒤 바로 이어서 볼 수 있어요.');
+      const chart = document.getElementById('score-chart');
+      new Chart(chart, {
+        type: 'line',
+        data: {
+          labels: ['00:00', '00:30', '01:00', '01:30', '02:00', '02:30'],
+          datasets: [{
+            data: [76, 82, 68, 86, 74, 88],
+            borderColor: '#2e2c3a',
+            backgroundColor: '#2e2c3a',
+            pointBackgroundColor: ['#2e2c3a', '#2e2c3a', '#EF4444', '#059669', '#EF4444', '#2e2c3a'],
+            pointRadius: [4, 4, 7, 5, 7, 4],
+            borderWidth: 2,
+            tension: 0.25,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 0, max: 100, grid: { color: '#DDE3EE' } },
+            x: { grid: { display: false } },
+          },
+          onClick: () => document.getElementById('video-modal').showModal(),
+        },
+      });
+
+      document.querySelectorAll('[data-open-modal]').forEach((button) => {
+        button.addEventListener('click', () => document.getElementById('video-modal').showModal());
+      });
+      document.querySelector('[data-close-modal]').addEventListener('click', () => {
+        document.getElementById('video-modal').close();
       });
 
       syncThemeToggle();

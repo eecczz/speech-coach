@@ -982,19 +982,23 @@ button:disabled {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
-/* Body-part highlight ring — drawn around the actual landmark causing the mistake
-   (wrist for gesture, eye for gaze, mouth for expression, etc.). */
-.mistake-circle {
+/* Chess-style bone overlay — coloured line drawn ALONG the body part causing
+   the moment (forearm for gesture, eye-line for gaze, spine for posture, …).
+   Green = positive (excellent/brilliant), warm colours = mistakes. The SVG
+   layer sits inside .video-mistake-overlay; marker glyphs render on top as
+   regular divs. */
+.mistake-bone-layer {
   position: absolute;
-  transform: translate(-50%, -50%);
-  border: 3px solid;
-  border-radius: 50%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  box-shadow:
-    0 0 8px rgba(0, 0, 0, 0.55),
-    inset 0 0 10px rgba(0, 0, 0, 0.35);
-  /* Same reason as .mistake-marker — entrance animation would restart 60×/sec
-     during playback and the circle would never become visible. */
+  /* Drop-shadow makes the bone readable on any video background. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+}
+.mistake-bone {
+  /* All visual properties (stroke, width) are set inline by render.ts so the
+     colour can come from the moment's quality. */
 }
 
 /* STT subtitles overlaid on the video — synced to currentTime by render.ts.

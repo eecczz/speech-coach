@@ -524,6 +524,8 @@ export interface LandmarkSnapshot {
     head: Point2;
     leftShoulder: Point2;
     rightShoulder: Point2;
+    leftElbow: Point2;
+    rightElbow: Point2;
     leftWrist: Point2;
     rightWrist: Point2;
     leftHip: Point2;
@@ -563,12 +565,16 @@ function snapshotLandmarks(
   }
   const pl = pose.landmarks?.[0];
   if (pl && pl.length >= 25) {
-    const head = pl[0], ls = pl[11], rs = pl[12], lw = pl[15], rw = pl[16], lh = pl[23], rh = pl[24];
-    if (head && ls && rs && lw && rw && lh && rh) {
+    const head = pl[0], ls = pl[11], rs = pl[12];
+    const le = pl[13], re = pl[14];
+    const lw = pl[15], rw = pl[16], lh = pl[23], rh = pl[24];
+    if (head && ls && rs && le && re && lw && rw && lh && rh) {
       snap.pose = {
         head: { x: head.x, y: head.y },
         leftShoulder: { x: ls.x, y: ls.y },
         rightShoulder: { x: rs.x, y: rs.y },
+        leftElbow: { x: le.x, y: le.y },
+        rightElbow: { x: re.x, y: re.y },
         leftWrist: { x: lw.x, y: lw.y },
         rightWrist: { x: rw.x, y: rw.y },
         leftHip: { x: lh.x, y: lh.y },

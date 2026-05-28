@@ -13,6 +13,7 @@ export default defineConfig({
         loading: resolve(__dirname, 'loading.html'),
         practice: resolve(__dirname, 'practice.html'),
         report: resolve(__dirname, 'report.html'),
+        dashboard: resolve(__dirname, 'dashboard.html'),
       },
     },
   },

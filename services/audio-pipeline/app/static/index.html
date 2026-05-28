@@ -8,37 +8,80 @@
       const savedTheme = localStorage.getItem('speakup-theme');
       document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
-    <link rel="stylesheet" crossorigin href="/assets/brand-C5xyIzSu.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" crossorigin href="/assets/brand-IyGxakMu.css">
   </head>
   <body>
-    <main class="container app-shell page-center">
-      <section class="screen home-start">
-        <div class="topbar">
-          <div class="brand">
-            <div class="brand-badge">S</div>
-            <div class="brand-copy">
-              <strong>SpeakUp</strong>
-              <span>말하기 연습 공간</span>
-            </div>
+    <main class="container app-shell">
+      <nav class="topbar app-nav">
+        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy">
+            <strong>SpeakUp</strong>
+            <span>AI Speech Coach</span>
           </div>
+        </a>
+        <div class="nav-links" aria-label="주요 링크">
+          <a href="#features">기능</a>
+          <a href="#reviews">사용후기</a>
+          <a href="#pricing">요금제</a>
+        </div>
+        <div class="topbar-actions">
+          <a class="btn btn-primary" href="create-project.html">시작하기</a>
           <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
         </div>
+      </nav>
 
-        <div class="home-copy">
-          <h1>오늘은 어떤 연습을 해볼까요?</h1>
-          <p>발표, 면접, 스피치, 리허설까지 편하게 말해보는 시간을 시작해요.</p>
+      <section class="home-hero">
+        <div class="home-hero-main">
+          <span class="eyebrow">AI Speech Coach</span>
+          <h1>말하는 방식이 달라지면, 삶이 달라져요.</h1>
+          <p>면접, 발표, 협상, 일상까지. 말하기의 모든 순간을 함께 연습해요.</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="create-project.html">무료로 시작하기</a>
+            <a class="btn btn-ghost" href="#preview">어떻게 작동하나요?</a>
+          </div>
+          <div class="situation-chips" aria-label="연습 상황">
+            <button type="button" class="chip is-selected">발표</button>
+            <button type="button" class="chip">면접</button>
+            <button type="button" class="chip">협상</button>
+            <button type="button" class="chip">일상 대화</button>
+            <button type="button" class="chip">전화</button>
+            <button type="button" class="chip">온라인</button>
+            <button type="button" class="chip">자유 연습</button>
+          </div>
         </div>
 
-        <div class="actions home-action">
-          <a class="btn btn-primary" href="create-project.html">연습 시작</a>
-        </div>
+        <aside class="preview-panel" id="preview" aria-label="코칭 결과 미리보기">
+          <div class="preview-head">
+            <span class="status-dot"></span>
+            <span>Session preview</span>
+          </div>
+          <div class="metric-row">
+            <div class="score-box">
+              <div class="label">Score</div>
+              <div class="value">82</div>
+            </div>
+            <div class="score-box">
+              <div class="label">WPM</div>
+              <div class="value">136</div>
+            </div>
+            <div class="score-box">
+              <div class="label">Filler</div>
+              <div class="value">4</div>
+            </div>
+          </div>
+          <div class="ai-feedback-box">
+            시작은 안정적이에요. 중반 이후 말 속도가 조금 빨라져서, 핵심 문장 앞에 짧은 쉼을 넣어보세요.
+          </div>
+        </aside>
+      </section>
 
-        <div class="quiet-tags" aria-label="코칭 방향">
-          <span>시선</span>
-          <span>속도</span>
-          <span>구조</span>
-          <span>자신감</span>
-        </div>
+      <section class="footer-strip" aria-label="서비스 지표">
+        <div><strong>12K+</strong><span>누적 세션</span></div>
+        <div><strong>8</strong><span>연습 상황</span></div>
+        <div><strong>3</strong><span>코칭 축</span></div>
       </section>
     </main>
 
@@ -56,6 +99,10 @@
         document.documentElement.dataset.theme = nextTheme;
         localStorage.setItem('speakup-theme', nextTheme);
         syncThemeToggle();
+      });
+
+      document.querySelectorAll('.situation-chips .chip').forEach((chip) => {
+        chip.addEventListener('click', () => chip.classList.toggle('is-selected'));
       });
 
       syncThemeToggle();

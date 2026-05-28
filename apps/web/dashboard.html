@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>성장 트래킹 - SpeakUp</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      document.documentElement.dataset.theme = savedTheme || 'light';
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/brand.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <main class="dashboard-shell">
+      <aside class="dashboard-nav">
+        <a class="brand" href="index.html">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy"><strong>SpeakUp</strong><span>Growth</span></div>
+        </a>
+        <nav>
+          <a class="is-active" href="dashboard.html"><i class="ti ti-chart-line"></i>성장 트래킹</a>
+          <a href="create-project.html"><i class="ti ti-sparkles"></i>새 연습</a>
+          <a href="report.html"><i class="ti ti-file-analytics"></i>리포트 모아보기</a>
+          <a href="#"><i class="ti ti-target"></i>목표 관리</a>
+          <a href="#"><i class="ti ti-settings"></i>환경설정</a>
+        </nav>
+      </aside>
+
+      <section class="dashboard-main">
+        <div class="dashboard-header">
+          <div>
+            <h1>이번 달 말하기 습관이 좋아지고 있어요.</h1>
+            <p>최근 세션의 변화와 다음 목표를 한눈에 확인해요.</p>
+          </div>
+          <div class="tabs">
+            <button class="tab is-active">30일</button>
+            <button class="tab">90일</button>
+            <button class="tab">전체</button>
+          </div>
+        </div>
+
+        <section class="metric-row">
+          <div class="score-box"><div class="label">Average</div><div class="value">82</div><p>+6</p></div>
+          <div class="score-box"><div class="label">Sessions</div><div class="value">14</div><p>+3</p></div>
+          <div class="score-box"><div class="label">Practice time</div><div class="value">3.8h</div><p>+42m</p></div>
+          <div class="score-box"><div class="label">Streak</div><div class="value">5</div><p>days</p></div>
+        </section>
+
+        <section class="card goal-banner">
+          <div>
+            <h2>면접 답변 안정감</h2>
+            <p>이전 74 → 현재 82 → 목표 88</p>
+          </div>
+          <div class="meter"><i style="width: 72%"></i></div>
+        </section>
+
+        <section class="card chart-card">
+          <div class="panel-title">
+            <h2>세션별 점수 성장</h2>
+            <div class="chart-toggles"><button>전체</button><button>언어</button><button>준언어</button><button>비언어</button></div>
+          </div>
+          <canvas id="growth-chart" height="130"></canvas>
+        </section>
+
+        <section class="habit-grid">
+          <div class="card habit-card"><h2>필러 표현</h2><div class="bar-list"><i style="height: 60%"></i><i style="height: 42%"></i><i style="height: 28%"></i></div><p>-32%</p></div>
+          <div class="card habit-card"><h2>말 속도</h2><div class="bar-list"><i style="height: 38%"></i><i style="height: 52%"></i><i style="height: 58%"></i></div><p>+14%</p></div>
+          <div class="card habit-card"><h2>시선 안정</h2><div class="bar-list"><i style="height: 34%"></i><i style="height: 48%"></i><i style="height: 72%"></i></div><p>+21%</p></div>
+        </section>
+      </section>
+
+      <aside class="history-side">
+        <section class="card">
+          <h2>상황별 연습</h2>
+          <div class="axis-row"><span class="axis-label">면접</span><span class="axis-bar"><span class="axis-fill" style="width: 62%"></span></span><span class="axis-score">8</span></div>
+          <div class="axis-row"><span class="axis-label">발표</span><span class="axis-bar"><span class="axis-fill" style="width: 38%"></span></span><span class="axis-score">5</span></div>
+          <div class="axis-row"><span class="axis-label">전화</span><span class="axis-bar"><span class="axis-fill" style="width: 18%"></span></span><span class="axis-score">2</span></div>
+        </section>
+        <section class="card recent-list">
+          <h2>최근 세션</h2>
+          <a href="report.html"><span>05.28</span><strong>최종 면접 준비</strong><em>82</em></a>
+          <a href="report.html"><span>05.26</span><strong>팀 발표 리허설</strong><em>78</em></a>
+          <a href="report.html"><span>05.21</span><strong>전화 응대 연습</strong><em>74</em></a>
+        </section>
+      </aside>
+    </main>
+
+    <script>
+      new Chart(document.getElementById('growth-chart'), {
+        type: 'line',
+        data: {
+          labels: ['1회', '2회', '3회', '4회', '5회', '6회'],
+          datasets: [
+            { label: '전체', data: [70, 73, 76, 78, 80, 82], borderColor: '#2e2c3a', borderWidth: 2, tension: 0.25 },
+            { label: '언어', data: [72, 74, 77, 80, 82, 84], borderColor: '#6b6880', borderDash: [4, 4], borderWidth: 1.5, tension: 0.25 },
+            { label: '준언어', data: [66, 69, 72, 73, 76, 78], borderColor: '#9896a8', borderDash: [4, 4], borderWidth: 1.5, tension: 0.25 },
+            { label: '비언어', data: [68, 70, 74, 76, 79, 81], borderColor: '#C8D0E0', borderDash: [4, 4], borderWidth: 1.5, tension: 0.25 },
+          ],
+        },
+        options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } },
+      });
+    </script>
+  </body>
+</html>

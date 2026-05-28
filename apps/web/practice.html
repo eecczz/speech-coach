@@ -8,19 +8,21 @@
       const savedTheme = localStorage.getItem('speakup-theme');
       document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="stylesheet" href="/src/brand.css" />
   </head>
   <body>
     <main id="practice-root" class="app-shell">
-      <div class="topbar">
-        <div class="brand">
+      <div class="topbar app-nav">
+        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
           <div class="brand-badge">S</div>
           <div class="brand-copy">
-            <strong id="page-title">Presentation #1</strong>
-              <span>연습 중</span>
+            <strong id="page-title">오늘의 말하기 연습</strong>
+            <span>Step 2 연습</span>
           </div>
-        </div>
+        </a>
         <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
       </div>
 
@@ -30,63 +32,96 @@
         <span>3 코칭</span>
       </section>
 
-      <section class="practice-grid">
-        <section class="screen single-column">
-          <div class="hero-copy">
-            <h1>편하게 연습을 시작해볼까요?</h1>
-            <p>녹화해둔 영상으로 시작하거나, 지금 바로 말해보며 리허설을 남겨보세요.</p>
+      <section class="practice-workspace">
+        <section class="screen practice-main-panel">
+          <div class="tabs" role="tablist" aria-label="연습 방식">
+            <button type="button" class="tab is-active" data-mode="live">실시간 녹화</button>
+            <button type="button" class="tab" data-mode="upload">영상 업로드</button>
           </div>
 
-          <div class="focus-summary" id="goal-summary" hidden></div>
-
-          <div class="upload-box" id="dropzone">
-            <strong>연습 영상 가져오기</strong>
-            <p>MP4 또는 WebM 파일을 가볍게 올려주세요.</p>
-            <label for="upload-file">
-              <span class="btn btn-primary">파일 선택</span>
-              <input id="upload-file" type="file" accept="video/*" />
-            </label>
-          </div>
-
-          <div class="file-row">
-            <div>
-              <strong id="file-name">선택된 파일이 없습니다</strong>
-              <span>업로드한 영상은 아래에서 미리 볼 수 있습니다.</span>
-            </div>
-            <span id="file-size">준비됨</span>
-          </div>
-
-          <div class="actions vertical">
-            <button id="btn-analyze" class="btn btn-primary" disabled>코칭 받기</button>
-          </div>
-
-          <section id="playback" class="playback" hidden>
-            <video id="recorded" controls></video>
-          </section>
-        </section>
-
-        <section class="card single-column live-card">
-          <div>
-            <h2>바로 말해보기</h2>
-            <p class="hint">카메라와 마이크를 켜고 짧게 리허설을 남길 수 있습니다.</p>
-          </div>
-
-          <section class="stage">
+          <section class="stage practice-video">
             <video id="cam" autoplay playsinline muted></video>
             <canvas id="avatar" width="640" height="720"></canvas>
-            <div id="status" class="status">초기화 중</div>
+            <div class="record-badge"><span></span>대기 중</div>
+            <div class="timer">00:00</div>
+            <div id="status" class="status">카메라 준비 중</div>
             <pre id="debug" class="debug"></pre>
           </section>
 
-          <section class="controls">
+          <section class="hud-grid" aria-label="실시간 지표">
+            <div class="hud-card is-muted">
+              <span>말 속도</span>
+              <strong>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+            <div class="hud-card is-muted">
+              <span>필러 표현</span>
+              <strong>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+            <div class="hud-card is-muted">
+              <span>침묵 구간</span>
+              <strong>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+          </section>
+
+          <section class="upload-mode" id="upload-panel">
+            <div class="upload-box" id="dropzone">
+              <strong>연습 영상 가져오기</strong>
+              <p>MP4 · WebM · MOV 파일을 끌어오거나 선택해주세요.</p>
+              <label for="upload-file">
+                <span class="btn btn-ghost">파일 선택</span>
+                <input id="upload-file" type="file" accept="video/*" />
+              </label>
+            </div>
+
+            <div class="file-row">
+              <div>
+                <strong id="file-name">선택된 파일이 없습니다</strong>
+                <span>업로드한 영상은 아래에서 미리 볼 수 있어요.</span>
+              </div>
+              <span id="file-size">—</span>
+            </div>
+
+            <section id="playback" class="playback" hidden>
+              <video id="recorded" controls></video>
+            </section>
+          </section>
+
+          <section class="feedback-stream" aria-label="실시간 피드백">
+            <div class="stream-row"><span>00:12</span><p>시작 속도가 안정적이에요.</p><em>좋음</em></div>
+            <div class="stream-row"><span>00:34</span><p>핵심 문장 앞에 짧은 쉼을 넣어보세요.</p><em>흐름</em></div>
+          </section>
+
+          <section class="controls practice-controls">
             <label class="device-pick">
               카메라
               <select id="cam-select"></select>
             </label>
-            <button id="btn-start" disabled>리허설 시작</button>
-            <button id="btn-stop" disabled>정지</button>
+            <button id="btn-start" class="btn btn-ghost" disabled>카메라 켜기</button>
+            <button id="btn-stop" class="btn btn-ghost" disabled>중지</button>
+            <button id="btn-analyze" class="btn btn-primary" disabled>AI 코칭 시작</button>
           </section>
         </section>
+
+        <aside class="side-panel practice-side">
+          <section class="card session-summary">
+            <h2>세션 정보</h2>
+            <dl>
+              <div><dt>상황</dt><dd id="session-type">자유 연습</dd></div>
+              <div><dt>포커스</dt><dd id="goal-summary">—</dd></div>
+              <div><dt>회차</dt><dd>1회차</dd></div>
+              <div><dt>이전 점수</dt><dd>—</dd></div>
+            </dl>
+          </section>
+          <section class="card focus-panel">
+            <h2>포커스 현황</h2>
+            <div class="axis-row"><span class="axis-label">언어적</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row"><span class="axis-label">준언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row"><span class="axis-label">비언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+          </section>
+        </aside>
       </section>
 
       <section id="review" hidden></section>
@@ -95,11 +130,22 @@
     <script>
       const themeToggle = document.querySelector('[data-theme-toggle]');
       const params = new URLSearchParams(location.search);
-      const project = params.get('project') || 'Presentation #1';
-      const goal = params.get('goal') || '시선 처리';
-      const focusItems = goal.split(',').map((item) => item.trim()).filter(Boolean);
+      const project = params.get('project') || '오늘의 말하기 연습';
+      const goal = params.get('goal') || '말 속도';
+      const type = params.get('type') || 'free';
+      const typeLabel = {
+        presentation: '발표',
+        interview: '면접',
+        negotiation: '협상',
+        persuasion: '설득',
+        daily: '일상 대화',
+        phone: '전화',
+        online: '온라인',
+        free: '자유 연습',
+      };
       document.getElementById('page-title').textContent = project;
-      document.getElementById('goal-summary').innerHTML = focusItems.map((item) => `<div class="mini-pill">${item}</div>`).join('');
+      document.getElementById('goal-summary').textContent = goal || '—';
+      document.getElementById('session-type').textContent = typeLabel[type] || '자유 연습';
 
       function syncThemeToggle() {
         const theme = document.documentElement.dataset.theme || 'light';
@@ -114,6 +160,13 @@
         syncThemeToggle();
       });
 
+      document.querySelectorAll('.tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach((el) => el.classList.remove('is-active'));
+          tab.classList.add('is-active');
+        });
+      });
+
       const upload = document.getElementById('upload-file');
       const analyze = document.getElementById('btn-analyze');
       const recorded = document.getElementById('recorded');
@@ -126,7 +179,7 @@
         if (!file) {
           analyze.disabled = true;
           fileName.textContent = '선택된 파일이 없습니다';
-          fileSize.textContent = '준비됨';
+          fileSize.textContent = '—';
           return;
         }
 
