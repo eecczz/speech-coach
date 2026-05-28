@@ -36,8 +36,8 @@ export function createAggregatorClient(opts: {
   httpBase?: string;
   wsBase?: string;
 } = {}): AggregatorClient {
-  const httpBase = opts.httpBase ?? ''; // Vite dev proxy handles /session/* and /ws/signals
-  const wsBase = opts.wsBase ?? '';
+  const httpBase = opts.httpBase ?? defaultAggregatorHttpBase();
+  const wsBase = opts.wsBase ?? defaultAggregatorWsUrl();
   let ws: WebSocket | null = null;
   let sessionId: string | null = null;
 
@@ -124,4 +124,30 @@ export function createAggregatorClient(opts: {
       }
     },
   };
+}
+
+function defaultAggregatorHttpBase(): string {
+  // Vite dev server proxies /session/* to 8001. The Docker/static app is served
+  // from audio-pipeline on 8000, so it must call aggregator on 8001 directly.
+  return location.port === '8000' ? originWithPort('8001') : '';
+}
+
+function defaultAggregatorWsUrl(): string {
+  if (location.port !== '8000') return '';
+  const url = new URL(location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.port = '8001';
+  url.pathname = '/ws/signals';
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+function originWithPort(port: string): string {
+  const url = new URL(location.href);
+  url.port = port;
+  url.pathname = '';
+  url.search = '';
+  url.hash = '';
+  return url.origin;
 }

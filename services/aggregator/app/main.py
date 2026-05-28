@@ -15,6 +15,7 @@ from typing import Optional
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from packages.schema import VisionFrame, SttSegment, ProsodyFrame
@@ -35,6 +36,18 @@ from .events import build_bundle
 COACH_URL = os.environ.get("COACH_URL", "http://coach:8002")
 
 app = FastAPI(title="Presentation Coach Aggregator")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 windowing = WindowingState()
 _hud_broadcasts: list[WebSocket] = []  # clients listening for live HUD pushback
 

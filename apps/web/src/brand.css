@@ -608,6 +608,15 @@ button.btn-primary {
   padding: 5px 10px;
 }
 
+.record-badge[data-state="recording"] span {
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.16);
+}
+
+.record-badge[data-state="done"] span {
+  background: var(--accent);
+}
+
 .timer {
   top: 12px;
   right: 12px;
