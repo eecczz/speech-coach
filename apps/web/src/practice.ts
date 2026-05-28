@@ -7,14 +7,14 @@ import {
 } from './avatar/retarget';
 import { resolveAvatarUrl } from './avatar/registry';
 import { createLandmarkers, detect } from './mediapipe/landmarkers';
-import { AvatarRecorder } from './recorder/canvas-record';
+import { AvatarRecorder, type AvatarRecording } from './recorder/canvas-record';
 import { computeVisionFrame, resetSignalState } from './signals/compute';
 import { SilenceDetector } from './signals/silence';
 import { createAggregatorClient } from './ws/client';
-import { renderReview } from './review/render';
 import type { ComprehensiveReport } from './review/types';
 import { uploadForAnalysis } from './audio-upload';
 import { analyzeUploadedVideo } from './upload-analyze';
+import { completeReviewNavigation } from './review/complete';
 
 const status = document.getElementById('status') as HTMLDivElement;
 const video = document.getElementById('cam') as HTMLVideoElement;
@@ -23,8 +23,15 @@ const debug = document.getElementById('debug') as HTMLPreElement;
 const camSelect = document.getElementById('cam-select') as HTMLSelectElement;
 const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
+const btnAnalyze = document.getElementById('btn-analyze') as HTMLButtonElement;
 const recorded = document.getElementById('recorded') as HTMLVideoElement;
-const reviewSection = document.getElementById('review') as HTMLElement;
+const timerEl = document.querySelector('.timer') as HTMLDivElement;
+const recordBadge = document.querySelector('.record-badge') as HTMLDivElement;
+
+function resolveScenario(): string {
+  const params = new URLSearchParams(location.search);
+  return params.get('scenario') || params.get('type') || 'presentation';
+}
 
 // Common virtual-camera label fragments. We avoid these on first try because
 // they often output a privacy filter or static image, not the actual user.
@@ -89,6 +96,30 @@ function setStatus(msg: string) {
   console.log('[practice]', msg);
 }
 
+function formatClock(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function setTimer(seconds: number): void {
+  timerEl.textContent = formatClock(seconds);
+}
+
+function setRecordBadge(label: string, state: 'idle' | 'recording' | 'done' = 'idle'): void {
+  recordBadge.dataset.state = state;
+  const dot = recordBadge.querySelector('span');
+  recordBadge.textContent = '';
+  if (dot) recordBadge.appendChild(dot);
+  recordBadge.append(label);
+}
+
+function activePracticeMode(): 'live' | 'upload' {
+  const mode = document.querySelector('.tab.is-active')?.getAttribute('data-mode');
+  return mode === 'upload' ? 'upload' : 'live';
+}
+
 async function bootstrap() {
   setStatus('카메라/마이크 권한 요청 중…');
   let stream = await acquireStream();
@@ -133,6 +164,9 @@ async function bootstrap() {
 
   setStatus('준비됨 — 거울처럼 따라옵니다. 녹화를 시작하면 webm 저장됩니다.');
   btnStart.disabled = false;
+  btnStart.textContent = '녹화 시작';
+  setTimer(0);
+  setRecordBadge('대기 중');
 
   const recorder = new AvatarRecorder();
   const aggregator = createAggregatorClient();
@@ -141,6 +175,7 @@ async function bootstrap() {
   let lastSignalSendT = 0;
   let lastProsodySendT = 0;
   let silenceDetector: SilenceDetector | null = null;
+  let pendingLiveRecording: AvatarRecording | null = null;
   // Outer scope so btnStop can pass it into /analyze (associates the audio
   // analysis with the recording session).
   let sessionId = '';
@@ -152,11 +187,16 @@ async function bootstrap() {
 
   btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
+    btnAnalyze.disabled = true;
+    btnStart.textContent = '녹화 중';
+    pendingLiveRecording = null;
+    setTimer(0);
+    setRecordBadge('녹화 중', 'recording');
     setStatus('세션 시작 중…');
     sessionId = `sess_${Date.now()}`;
     // Scenario picks the coach rubric: presentation | interview | vocal | ...
     // (see services/coach/rubrics/*.yaml). Default 'presentation' if no URL param.
-    const scenario = new URLSearchParams(location.search).get('scenario') || 'presentation';
+    const scenario = resolveScenario();
     resetSignalState();
     await aggregator.start(sessionId, scenario);
     recorder.start(stream); // record the user's video+audio directly (avatar canvas is hidden)
@@ -178,37 +218,14 @@ async function bootstrap() {
       silenceDetector = null;
     }
     const rec = await recorder.stop();
+    pendingLiveRecording = rec;
     recorded.src = rec.url;
-
-    // Phase 2 audio pipeline — upload webm to /analyze (STT + prosody), merge
-    // result into the bundle via aggregator /session/end. faster-whisper +
-    // librosa on a 1-2 min clip on CPU usually 30-90s, hence the status update.
-    setStatus(`음성 분석 중… (Whisper + 운율, 최대 ~1분)`);
-    let audioResult: Awaited<ReturnType<typeof uploadForAnalysis>> | null = null;
-    try {
-      audioResult = await uploadForAnalysis(rec.blob, sessionId);
-      console.log('[audio] analyze result', audioResult);
-    } catch (e) {
-      console.warn('[audio] /analyze failed — bundling without server-side audio', e);
-    }
-
-    setStatus(`평가 생성 중…`);
-    const result = await aggregator.end(audioResult);
-    aggregator.close();
-    if (result && (result as { report?: ComprehensiveReport }).report) {
-      const report = (result as { report: ComprehensiveReport }).report;
-      console.log('[coach] result', result);
-      reviewSection.hidden = false;
-      renderReview(report, recorded);
-      setStatus(
-        `평가 완료 — 종합 ${report.accuracy_overall?.toFixed(1) ?? '?'}점, 순간 ${report.annotated_moments?.length ?? 0}개`,
-      );
-      reviewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      console.warn('[coach] result missing or malformed', result);
-      setStatus('녹화 완료 — 평가 서버 응답 없음 (콘솔 확인)');
-    }
     btnStart.disabled = false;
+    btnStart.textContent = '다시 녹화';
+    btnAnalyze.disabled = false;
+    setTimer(rec.durationMs / 1000);
+    setRecordBadge('녹화 완료', 'done');
+    setStatus(`녹화 완료 — AI 코칭 시작을 누르면 분석합니다. (${(rec.durationMs / 1000).toFixed(1)}초)`);
   });
 
   // Animation loop with diagnostics
@@ -244,6 +261,9 @@ async function bootstrap() {
     const ready = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
+    if (recording) {
+      setTimer(now / 1000 - recordingStartTSec);
+    }
 
     if (ready && vw > 0 && vh > 0 && liveDetect) {
       // Sample frame brightness every ~10 frames to verify camera isn't black.
@@ -323,11 +343,9 @@ async function bootstrap() {
     }
   });
 
-  // ── Uploaded-video flow ──
-  // Wires #btn-analyze (in the upload section above the recording stage) to the
-  // upload-analyze pipeline. Re-uses the same landmarkers + aggregator + review
-  // section the live flow uses, so evaluation depth is identical.
-  const btnAnalyze = document.getElementById('btn-analyze') as HTMLButtonElement | null;
+  // ── AI coaching flow ──
+  // Live mode: analyze the just-recorded webm after the user clicks AI coaching.
+  // Upload mode: replay the selected video through the same vision/audio pipeline.
   const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
   if (btnAnalyze && uploadInput) {
     btnAnalyze.addEventListener('click', async (ev) => {
@@ -336,7 +354,49 @@ async function bootstrap() {
       // HTML, but defense-in-depth is fine.)
       ev.preventDefault();
       ev.stopImmediatePropagation();
+      const mode = activePracticeMode();
       const file = uploadInput.files?.[0];
+
+      if (mode === 'live') {
+        if (!pendingLiveRecording || !sessionId) {
+          setStatus('먼저 녹화를 완료해 주세요');
+          return;
+        }
+        btnAnalyze.disabled = true;
+        btnStart.disabled = true;
+        btnStop.disabled = true;
+        setStatus(`음성 분석 중… (STT + 운율, 최대 ~1분)`);
+        let audioResult: Awaited<ReturnType<typeof uploadForAnalysis>> | null = null;
+        try {
+          audioResult = await uploadForAnalysis(pendingLiveRecording.blob, sessionId);
+          console.log('[audio] analyze result', audioResult);
+        } catch (e) {
+          console.warn('[audio] /analyze failed — bundling without server-side audio', e);
+        }
+
+        setStatus(`평가 생성 중…`);
+        const result = await aggregator.end(audioResult);
+        aggregator.close();
+        if (result && (result as { report?: ComprehensiveReport }).report) {
+          const report = (result as { report: ComprehensiveReport }).report;
+          console.log('[coach] result', result);
+          await completeReviewNavigation({
+            report,
+            videoBlob: pendingLiveRecording.blob,
+            videoType: pendingLiveRecording.blob.type,
+            source: 'live',
+            setStatus,
+          });
+          return;
+        } else {
+          console.warn('[coach] result missing or malformed', result);
+          setStatus('평가 실패 — 콘솔 확인');
+          btnAnalyze.disabled = false;
+          btnStart.disabled = false;
+        }
+        return;
+      }
+
       if (!file) {
         setStatus('영상 파일을 먼저 선택해 주세요');
         return;
@@ -344,16 +404,13 @@ async function bootstrap() {
       btnAnalyze.disabled = true;
       btnStart.disabled = true;
       liveDetect = false; // suspend live tick — upload flow drives the landmarker
-      const scenario =
-        new URLSearchParams(location.search).get('scenario') || 'presentation';
+      const scenario = resolveScenario();
       try {
         await analyzeUploadedVideo(file, {
           scenario,
           landmarkers,
           aggregator,
           setStatus,
-          reviewSection,
-          reviewVideo: recorded,
         });
       } catch (e) {
         console.error('[upload] flow failed', e);

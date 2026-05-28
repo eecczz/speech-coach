@@ -18,8 +18,8 @@ import { detect, type Landmarkers } from './mediapipe/landmarkers';
 import { computeVisionFrame, resetSignalState } from './signals/compute';
 import type { AggregatorClient, AudioAnalysisResult } from './ws/client';
 import { uploadForAnalysis } from './audio-upload';
-import { renderReview } from './review/render';
 import type { ComprehensiveReport } from './review/types';
+import { completeReviewNavigation } from './review/complete';
 
 const SAMPLE_INTERVAL_MS = 200; // 5 samples / sec wall-clock
 const PLAYBACK_RATE = 2;        // 2× realtime keeps a 5min upload to ~2.5min vision
@@ -31,8 +31,6 @@ export interface UploadAnalyzeContext {
   landmarkers: Landmarkers;
   aggregator: AggregatorClient;
   setStatus: (msg: string) => void;
-  reviewSection: HTMLElement;
-  reviewVideo: HTMLVideoElement; // visible <video> renderReview hangs its overlay onto
 }
 
 export async function analyzeUploadedVideo(
@@ -57,9 +55,6 @@ export async function analyzeUploadedVideo(
   probe.style.width = '320px';
   probe.style.height = '240px';
   document.body.appendChild(probe);
-
-  // Mirror src onto the visible review video so renderReview can scrub it.
-  ctx.reviewVideo.src = url;
 
   try {
     ctx.setStatus('영상 로딩 중…');
@@ -108,7 +103,7 @@ export async function analyzeUploadedVideo(
     }
 
     // ── Audio: ship the original file to /analyze (STT + prosody) ──
-    ctx.setStatus('음성 분석 중… (Whisper + 운율, 최대 ~1분)');
+    ctx.setStatus('음성 분석 중… (STT + 운율, 최대 ~1분)');
     let audioResult: AudioAnalysisResult | null = null;
     try {
       audioResult = await uploadForAnalysis(file, sessionId, file.name);
@@ -125,20 +120,21 @@ export async function analyzeUploadedVideo(
     if (result && (result as { report?: ComprehensiveReport }).report) {
       const report = (result as { report: ComprehensiveReport }).report;
       console.log('[upload] coach result', result);
-      ctx.reviewSection.hidden = false;
-      renderReview(report, ctx.reviewVideo);
-      ctx.setStatus(
-        `평가 완료 — 종합 ${report.accuracy_overall?.toFixed(1) ?? '?'}점, 순간 ${report.annotated_moments?.length ?? 0}개`,
-      );
-      ctx.reviewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await completeReviewNavigation({
+        report,
+        videoBlob: file,
+        videoName: file.name,
+        videoType: file.type,
+        source: 'upload',
+        setStatus: ctx.setStatus,
+      });
     } else {
       ctx.setStatus('평가 실패 — 콘솔 확인');
       console.warn('[upload] coach result missing or malformed', result);
     }
   } finally {
-    // Don't revoke `url` — reviewVideo is still using it. The browser will GC
-    // the blob after the page reloads / video src changes.
     try { probe.pause(); } catch { /* ignore */ }
+    URL.revokeObjectURL(url);
     probe.remove();
   }
 }
