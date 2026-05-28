@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>분석 중 — SpeakUp</title>
+    <title>코칭 준비 중 - SpeakUp</title>
     <script>
       const savedTheme = localStorage.getItem('speakup-theme');
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+      document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
     <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/brand.css" />
   </head>
   <body>
     <main class="container app-shell page-center">
@@ -19,15 +19,21 @@
             <div class="brand-badge">S</div>
             <div class="brand-copy">
               <strong>SpeakUp</strong>
-              <span>준비 중</span>
+              <span>리허설 정리 중</span>
             </div>
           </div>
           <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
         </div>
 
-        <div class="hero-copy">
-          <h1>분석 중</h1>
-          <p>잠시만 기다려주세요.</p>
+        <section class="progress-steps" aria-label="진행 단계">
+          <span>1 준비</span>
+          <span>2 연습</span>
+          <span class="is-current">3 코칭</span>
+        </section>
+
+        <div class="hero-copy compact-copy">
+          <h1>방금 연습을 차분히 정리하고 있어요.</h1>
+          <p>좋았던 흐름과 다시 연습하면 좋은 순간을 함께 모으는 중입니다.</p>
         </div>
 
         <div id="steps" class="loading-stack"></div>
@@ -43,8 +49,8 @@
     <script>
       const themeToggle = document.querySelector('[data-theme-toggle]');
       const params = new URLSearchParams(location.search);
-      const project = params.get('project') || '오늘의 리허설';
-      const goal = params.get('goal') || '시선 처리';
+      const project = params.get('project') || '오늘의 말하기 연습';
+      const goal = params.get('goal') || '시선';
 
       function syncThemeToggle() {
         const theme = document.documentElement.dataset.theme || 'light';
@@ -60,9 +66,9 @@
       });
 
       const steps = [
-        '시선 흐름을 확인하는 중…',
-        '발표 습관을 분석하는 중…',
-        '피드백을 정리하는 중…'
+        '말의 흐름을 살펴보는 중',
+        '잠깐 멈춘 순간을 정리하는 중',
+        '다음 연습 포인트를 고르는 중',
       ];
 
       const stepsEl = document.getElementById('steps');

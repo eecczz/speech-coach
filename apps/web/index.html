@@ -3,35 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SpeakUp — 홈</title>
+    <title>SpeakUp</title>
     <script>
       const savedTheme = localStorage.getItem('speakup-theme');
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.dataset.theme = savedTheme || (systemDark ? 'dark' : 'light');
+      document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
     <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/brand.css" />
   </head>
   <body>
     <main class="container app-shell page-center">
-      <section class="screen single-column" style="max-width: 560px; width: 100%;">
+      <section class="screen home-start">
         <div class="topbar">
           <div class="brand">
             <div class="brand-badge">S</div>
             <div class="brand-copy">
               <strong>SpeakUp</strong>
-              <span>발표 연습을 더 편하게</span>
+              <span>말하기 연습 공간</span>
             </div>
           </div>
           <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
         </div>
 
-        <div class="hero-copy" style="padding-top: 8px;">
-          <h1>발표를 더 자연스럽게.</h1>
-          <p>오늘도 편하게 연습해볼까요?</p>
+        <div class="home-copy">
+          <h1>오늘은 어떤 연습을 해볼까요?</h1>
+          <p>발표, 면접, 스피치, 리허설까지 편하게 말해보는 시간을 시작해요.</p>
         </div>
 
-        <div class="actions vertical" style="padding-top: 4px;">
-          <a class="btn btn-primary" href="create-project.html">시작하기</a>
+        <div class="actions home-action">
+          <a class="btn btn-primary" href="create-project.html">연습 시작</a>
+        </div>
+
+        <div class="quiet-tags" aria-label="코칭 방향">
+          <span>시선</span>
+          <span>속도</span>
+          <span>구조</span>
+          <span>자신감</span>
         </div>
       </section>
     </main>
