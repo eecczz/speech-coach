@@ -1,111 +1,183 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SpeakUp</title>
-    <script>
-      const savedTheme = localStorage.getItem('speakup-theme');
-      document.documentElement.dataset.theme = savedTheme || 'light';
-    </script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
-    <link rel="stylesheet" crossorigin href="/assets/brand-IyGxakMu.css">
-  </head>
-  <body>
-    <main class="container app-shell">
-      <nav class="topbar app-nav">
-        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
-          <div class="brand-badge">S</div>
-          <div class="brand-copy">
-            <strong>SpeakUp</strong>
-            <span>AI Speech Coach</span>
-          </div>
-        </a>
-        <div class="nav-links" aria-label="주요 링크">
-          <a href="#features">기능</a>
-          <a href="#reviews">사용후기</a>
-          <a href="#pricing">요금제</a>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpeakUp</title>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:'Pretendard',-apple-system,sans-serif;background:#F4F6FB;color:#2e2c3a;min-height:100vh;display:flex;flex-direction:column;}
+.nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:56px;background:rgba(244,246,251,.85);backdrop-filter:blur(12px);border-bottom:0.5px solid #DDE3EE;}
+.nav-logo{display:flex;align-items:center;gap:9px;text-decoration:none;}
+.nav-icon{width:28px;height:28px;background:#2e2c3a;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.nav-icon span{font-size:12px;font-weight:600;color:#F4F6FB;}
+.nav-name{font-size:14px;font-weight:600;color:#2e2c3a;letter-spacing:-0.03em;}
+.nav-links{display:flex;align-items:center;gap:4px;}
+.nav-link{font-size:13px;color:#6b6880;padding:5px 14px;border-radius:999px;border:0.5px solid transparent;cursor:pointer;text-decoration:none;transition:all .12s;background:transparent;font-family:'Pretendard',sans-serif;}
+.nav-link:hover{background:#EEF3F8;color:#2e2c3a;}
+.nav-link.outline{border-color:#DDE3EE;}
+.nav-cta{font-size:13px;font-weight:500;color:#F4F6FB;background:#2e2c3a;border:none;border-radius:999px;padding:7px 18px;cursor:pointer;font-family:'Pretendard',sans-serif;transition:opacity .12s;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
+.nav-cta:hover{opacity:.85;}
+.hero{flex:1;display:flex;flex-direction:column;align-items:center;padding:72px 24px 64px;text-align:center;}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#6b6880;letter-spacing:.07em;text-transform:uppercase;padding:4px 13px;border-radius:999px;border:0.5px solid #DDE3EE;background:#fff;margin-bottom:24px;}
+.hero-badge-dot{width:5px;height:5px;border-radius:50%;background:#2e2c3a;}
+.hero-title{font-size:48px;font-weight:600;color:#2e2c3a;letter-spacing:-0.035em;line-height:1.18;margin-bottom:18px;max-width:640px;}
+.hero-title .muted{color:#9896a8;}
+.hero-sub{font-size:16px;font-weight:400;color:#6b6880;line-height:1.75;letter-spacing:-0.01em;max-width:400px;margin-bottom:36px;}
+.hero-btns{display:flex;gap:10px;align-items:center;justify-content:center;margin-bottom:52px;}
+.btn-main{font-size:14px;font-weight:500;color:#F4F6FB;background:#2e2c3a;border:none;border-radius:999px;padding:11px 28px;cursor:pointer;font-family:'Pretendard',sans-serif;display:flex;align-items:center;gap:7px;transition:opacity .12s;text-decoration:none;}
+.btn-main:hover{opacity:.85;}
+.btn-ghost{font-size:14px;color:#6b6880;background:transparent;border:0.5px solid #DDE3EE;border-radius:999px;padding:11px 22px;cursor:pointer;font-family:'Pretendard',sans-serif;transition:all .12s;text-decoration:none;}
+.btn-ghost:hover{border-color:#9896a8;color:#2e2c3a;}
+.situations{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:48px;}
+.sit-chip{display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:999px;border:0.5px solid #DDE3EE;background:#fff;font-size:13px;color:#6b6880;cursor:pointer;transition:all .15s;font-family:'Pretendard',sans-serif;}
+.sit-chip i{font-size:15px;}
+.sit-chip:hover{border-color:#9896a8;color:#2e2c3a;}
+.sit-chip.active{background:#2e2c3a;color:#F4F6FB;border-color:#2e2c3a;}
+.preview-wrap{width:100%;max-width:680px;margin-bottom:14px;}
+.preview-card{background:#fff;border:0.5px solid #DDE3EE;border-radius:16px;overflow:hidden;box-shadow:0 2px 24px rgba(46,44,58,.06);}
+.preview-topbar{display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:0.5px solid #EEF3F8;background:#FAFBFF;}
+.preview-steps{display:flex;gap:5px;}
+.prev-step{font-size:10px;padding:3px 10px;border-radius:999px;font-family:'Pretendard',sans-serif;}
+.preview-meta{font-size:11px;color:#9896a8;margin-left:auto;}
+.preview-body{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:16px 18px;}
+.prev-card{border-radius:10px;padding:12px 14px;border:0.5px solid #EEF3F8;background:#F4F6FB;}
+.prev-card-label{font-size:10px;color:#9896a8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
+.prev-card-val{font-size:20px;font-weight:500;color:#2e2c3a;font-family:'Pretendard',monospace;}
+.prev-card-val span{font-size:12px;color:#9896a8;}
+.prev-card-delta{font-size:11px;color:#059669;margin-top:3px;display:flex;align-items:center;gap:3px;}
+.prev-ai{margin:0 18px 16px;border-left:2px solid #2e2c3a;border-radius:0 10px 10px 0;background:#EEF3F8;padding:10px 13px;font-size:13px;color:#4a4858;line-height:1.65;}
+.preview-hint{padding:10px 18px;border-top:0.5px solid #EEF3F8;font-size:11px;color:#C8D0E0;display:flex;align-items:center;gap:5px;background:#FAFBFF;}
+.features{display:flex;align-items:stretch;justify-content:center;width:100%;max-width:680px;border:0.5px solid #DDE3EE;border-radius:14px;background:#fff;overflow:hidden;margin-top:14px;}
+.feat{flex:1;padding:18px 20px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;border-right:0.5px solid #DDE3EE;}
+.feat:last-child{border-right:none;}
+.feat-icon{width:32px;height:32px;border-radius:8px;background:#EEF3F8;display:flex;align-items:center;justify-content:center;}
+.feat-icon i{font-size:16px;color:#2e2c3a;}
+.feat-title{font-size:13px;font-weight:500;color:#2e2c3a;letter-spacing:-0.01em;}
+.feat-desc{font-size:12px;color:#9896a8;line-height:1.6;}
+@media (max-width: 880px){
+  .nav{padding:0 20px;}
+  .nav-links{display:none;}
+  .hero-title{font-size:38px;}
+  .preview-body{grid-template-columns:1fr;}
+  .features{flex-direction:column;}
+  .feat{border-right:none;border-bottom:0.5px solid #DDE3EE;}
+  .feat:last-child{border-bottom:none;}
+}
+@media (max-width: 560px){
+  .nav{padding:0 16px;height:52px;}
+  .nav-name{display:none;}
+  .hero{padding:56px 18px 48px;}
+  .hero-title{font-size:31px;}
+  .hero-sub{font-size:14px;}
+  .hero-btns{flex-direction:column;width:100%;}
+  .btn-main,.btn-ghost,.nav-cta{width:100%;justify-content:center;}
+  .preview-topbar{flex-wrap:wrap;}
+  .preview-meta{margin-left:0;}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="index.html">
+    <div class="nav-icon"><span>S</span></div>
+    <span class="nav-name">SpeakUp</span>
+  </a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">기능</a>
+    <a class="nav-link" href="#">사용 후기</a>
+    <a class="nav-link outline" href="#">요금제</a>
+    <a class="nav-link outline" href="#">로그인</a>
+  </div>
+  <a class="nav-cta" href="create-project.html">연습 시작하기</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">
+    <div class="hero-badge-dot"></div>
+    AI Speech Coach
+  </div>
+  <h1 class="hero-title">말하는 방식이 달라지면,<br><span class="muted">삶이 달라져요.</span></h1>
+  <p class="hero-sub">면접, 발표, 협상, 일상까지.<br>말하기의 모든 순간을 함께 연습해요.</p>
+  <div class="hero-btns">
+    <a class="btn-main" href="create-project.html"><i class="ti ti-player-record" style="font-size:15px;" aria-hidden="true"></i>무료로 시작하기</a>
+    <a class="btn-ghost" href="#preview">어떻게 작동하나요?</a>
+  </div>
+
+  <div class="situations">
+    <span class="sit-chip active" onclick="selectSit(this)"><i class="ti ti-presentation" aria-hidden="true"></i>발표</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-briefcase" aria-hidden="true"></i>면접</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-handshake" aria-hidden="true"></i>협상</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-message-circle" aria-hidden="true"></i>일상 대화</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-phone" aria-hidden="true"></i>전화·온라인</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-sparkles" aria-hidden="true"></i>자유 연습</span>
+  </div>
+
+  <div class="preview-wrap" id="preview">
+    <div class="preview-card">
+      <div class="preview-topbar">
+        <div class="preview-steps">
+          <span class="prev-step" style="background:#2e2c3a;color:#F4F6FB;">1 준비</span>
+          <span class="prev-step" style="background:#EEF3F8;color:#9896a8;">2 연습</span>
+          <span class="prev-step" style="background:#EEF3F8;color:#9896a8;">3 코칭</span>
         </div>
-        <div class="topbar-actions">
-          <a class="btn btn-primary" href="create-project.html">시작하기</a>
-          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+        <span class="preview-meta" id="preview-meta">오늘의 발표 연습 · 3회차</span>
+      </div>
+      <div class="preview-body">
+        <div class="prev-card">
+          <div class="prev-card-label">말 속도</div>
+          <div class="prev-card-val">142 <span>wpm</span></div>
+          <div class="prev-card-delta"><i class="ti ti-trending-up" style="font-size:12px;" aria-hidden="true"></i>저번보다 8% 개선</div>
         </div>
-      </nav>
-
-      <section class="home-hero">
-        <div class="home-hero-main">
-          <span class="eyebrow">AI Speech Coach</span>
-          <h1>말하는 방식이 달라지면, 삶이 달라져요.</h1>
-          <p>면접, 발표, 협상, 일상까지. 말하기의 모든 순간을 함께 연습해요.</p>
-          <div class="actions">
-            <a class="btn btn-primary" href="create-project.html">무료로 시작하기</a>
-            <a class="btn btn-ghost" href="#preview">어떻게 작동하나요?</a>
-          </div>
-          <div class="situation-chips" aria-label="연습 상황">
-            <button type="button" class="chip is-selected">발표</button>
-            <button type="button" class="chip">면접</button>
-            <button type="button" class="chip">협상</button>
-            <button type="button" class="chip">일상 대화</button>
-            <button type="button" class="chip">전화</button>
-            <button type="button" class="chip">온라인</button>
-            <button type="button" class="chip">자유 연습</button>
-          </div>
+        <div class="prev-card">
+          <div class="prev-card-label">필러 표현</div>
+          <div class="prev-card-val">3 <span>회</span></div>
+          <div class="prev-card-delta"><i class="ti ti-trending-up" style="font-size:12px;" aria-hidden="true"></i>5회 줄었어요</div>
         </div>
+        <div class="prev-card">
+          <div class="prev-card-label">전체 점수</div>
+          <div class="prev-card-val">78 <span>/ 100</span></div>
+          <div class="prev-card-delta"><i class="ti ti-trending-up" style="font-size:12px;" aria-hidden="true"></i>목표까지 7점</div>
+        </div>
+      </div>
+      <div class="prev-ai" id="preview-ai">말의 흐름이 안정됐고 도입부에서 자신감이 느껴졌어요. 다음엔 답변 마무리를 좀 더 명확하게 끝내보세요.</div>
+      <div class="preview-hint"><i class="ti ti-lock" style="font-size:12px;" aria-hidden="true"></i>실제 영상은 서버에 저장되지 않아요. 분석 후 즉시 삭제돼요.</div>
+    </div>
+  </div>
 
-        <aside class="preview-panel" id="preview" aria-label="코칭 결과 미리보기">
-          <div class="preview-head">
-            <span class="status-dot"></span>
-            <span>Session preview</span>
-          </div>
-          <div class="metric-row">
-            <div class="score-box">
-              <div class="label">Score</div>
-              <div class="value">82</div>
-            </div>
-            <div class="score-box">
-              <div class="label">WPM</div>
-              <div class="value">136</div>
-            </div>
-            <div class="score-box">
-              <div class="label">Filler</div>
-              <div class="value">4</div>
-            </div>
-          </div>
-          <div class="ai-feedback-box">
-            시작은 안정적이에요. 중반 이후 말 속도가 조금 빨라져서, 핵심 문장 앞에 짧은 쉼을 넣어보세요.
-          </div>
-        </aside>
-      </section>
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon"><i class="ti ti-live-photo" aria-hidden="true"></i></div>
+      <div class="feat-title">실시간 피드백</div>
+      <div class="feat-desc">말하는 동안 시선·속도·필러를 실시간으로 감지해요.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon"><i class="ti ti-robot" aria-hidden="true"></i></div>
+      <div class="feat-title">아바타로 복기</div>
+      <div class="feat-desc">내 얼굴 대신 아바타로 발표를 다시 봐요. 부담 없이 객관적으로.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></div>
+      <div class="feat-title">성장 트래킹</div>
+      <div class="feat-desc">세션이 쌓일수록 습관 변화와 성장이 시각화돼요.</div>
+    </div>
+  </div>
+</section>
 
-      <section class="footer-strip" aria-label="서비스 지표">
-        <div><strong>12K+</strong><span>누적 세션</span></div>
-        <div><strong>8</strong><span>연습 상황</span></div>
-        <div><strong>3</strong><span>코칭 축</span></div>
-      </section>
-    </main>
-
-    <script>
-      const themeToggle = document.querySelector('[data-theme-toggle]');
-
-      function syncThemeToggle() {
-        const theme = document.documentElement.dataset.theme || 'light';
-        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
-        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
-      }
-
-      themeToggle.addEventListener('click', () => {
-        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.theme = nextTheme;
-        localStorage.setItem('speakup-theme', nextTheme);
-        syncThemeToggle();
-      });
-
-      document.querySelectorAll('.situation-chips .chip').forEach((chip) => {
-        chip.addEventListener('click', () => chip.classList.toggle('is-selected'));
-      });
-
-      syncThemeToggle();
-    </script>
-  </body>
+<script>
+const sitMeta={'발표':'오늘의 발표 연습 · 3회차','면접':'오늘의 면접 연습 · 5회차','협상':'오늘의 협상 연습 · 2회차','일상 대화':'오늘의 일상 대화 연습 · 1회차','전화·온라인':'오늘의 전화 연습 · 4회차','자유 연습':'오늘의 자유 연습 · 7회차'};
+const sitAI={'발표':'말의 흐름이 안정됐고 도입부에서 자신감이 느껴졌어요. 다음엔 답변 마무리를 좀 더 명확하게 끝내보세요.','면접':'자기소개 구간이 자연스럽게 흘렀어요. 다음엔 "이상입니다"로 답변을 명확하게 끝내보세요.','협상':'논리 흐름은 탄탄했어요. 설득 구간에서 말 속도가 빨라졌으니 다음엔 여유 있게 가보세요.','일상 대화':'첫 인상이 따뜻하게 느껴졌어요. 필러 표현이 조금 있었는데 잠깐 멈추는 연습을 해보세요.','전화·온라인':'목소리 볼륨이 안정적이었어요. 비대면에선 더 또렷하게 첫 마디를 시작해보세요.','자유 연습':'전반적으로 말이 유려하게 흘렀어요. 다음엔 특정 상황을 정해서 집중 연습해보세요.'};
+function selectSit(el){
+  document.querySelectorAll('.sit-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  const name=el.textContent.trim();
+  document.getElementById('preview-meta').textContent=sitMeta[name]||'';
+  document.getElementById('preview-ai').textContent=sitAI[name]||'';
+}
+</script>
+</body>
 </html>
