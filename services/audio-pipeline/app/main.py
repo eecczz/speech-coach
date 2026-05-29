@@ -1,4 +1,4 @@
-"""Audio analysis server — STT (faster-whisper) + prosody (librosa).
+"""Audio analysis server — STT + prosody (librosa).
 
 Endpoints:
   POST /transcribe — legacy PoC, raw STT result (kept for ad-hoc testing).
@@ -28,6 +28,10 @@ stt = STT(
     model_name=os.environ.get("WHISPER_MODEL", "large-v3"),
     device=os.environ.get("WHISPER_DEVICE", "auto"),
     compute_type=os.environ.get("WHISPER_COMPUTE_TYPE", "auto"),
+    provider=os.environ.get("STT_PROVIDER", "local"),
+    jeonbuk_model=os.environ.get("JEONBUK_STT_MODEL", "cohere-transcribe"),
+    jeonbuk_base_url=os.environ.get("JEONBUK_BASE_URL", "https://ai.jb.go.kr/student-api/v1"),
+    jeonbuk_api_key=os.environ.get("JEONBUK_API_KEY"),
 )
 
 
@@ -100,7 +104,7 @@ async def analyze(
         stt_segments: SttSegment[],
         prosody_frames: ProsodyFrame[],   # one per STT segment
         elapsed_s: float,
-        whisper_elapsed_s: float,
+        stt_elapsed_s: float,
       }
     """
     suffix = Path(audio.filename or "rec.webm").suffix or ".webm"
@@ -115,10 +119,10 @@ async def analyze(
         # 1) ffmpeg → 16kHz mono WAV
         _webm_to_wav(src_path, wav_path)
 
-        # 2) faster-whisper transcribe (word timestamps + VAD already on inside STT)
+        # 2) STT transcribe (local faster-whisper or Jeonbuk API provider)
         t_w = time.perf_counter()
         result = stt.transcribe(wav_path, language=language)
-        whisper_elapsed = time.perf_counter() - t_w
+        stt_elapsed = time.perf_counter() - t_w
 
         stt_segments = _to_stt_segments(result.get("segments", []))
 
@@ -131,7 +135,9 @@ async def analyze(
             "stt_segments": stt_segments,
             "prosody_frames": prosody_frames,
             "elapsed_s": time.perf_counter() - t_total,
-            "whisper_elapsed_s": whisper_elapsed,
+            "stt_elapsed_s": stt_elapsed,
+            # Backward-compatible field name kept for existing debug tooling.
+            "whisper_elapsed_s": stt_elapsed,
         })
     except subprocess.CalledProcessError as e:
         return JSONResponse(

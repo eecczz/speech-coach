@@ -52,14 +52,7 @@ const AXIS_LABEL: Record<string, string> = {
 
 // ── Visual mistake marker mapping ──
 //
-// Per-moment landmark positions aren't (yet) carried in the SessionBundle, so V1
-// maps each moment's AXIS to a generic region of the video frame and renders a
-// "?"/"??"/"?!" glyph there. Body-axis moments get an overlay on the relevant
-// body region; verbal-axis moments get a caption-strip overlay near the bottom
-// (which will sit over real subtitles once STT lands). To make this per-arm or
-// per-word precise in V2, the aggregator would need to capture and forward the
-// triggering landmark/word index — for now the axis→region map is sufficient
-// to demo the visual concept.
+// Verbal-axis moments get a compact caption-strip marker near the subtitles.
 const AXIS_REGION: Record<string, [number, number]> = {
   gaze:       [50, 22],   // head/eye area
   expression: [50, 27],   // face
@@ -68,15 +61,6 @@ const AXIS_REGION: Record<string, [number, number]> = {
   delivery:   [50, 78],   // caption strip (above standard <video controls>)
   logic:      [50, 78],
   overall:    [50, 50],
-};
-
-const QUALITY_MARK: Record<string, string> = {
-  brilliant:  '★',
-  excellent:  '★',
-  good:       '·',
-  inaccuracy: '?',
-  mistake:    '??',
-  blunder:    '?!',
 };
 
 // Two moments are "concurrent" if their time spans overlap (with a small fuzz pad
@@ -339,7 +323,13 @@ export function renderReview(
   });
   $video.addEventListener('ended', () => cancelAnimationFrame(rafId));
   $video.addEventListener('seeked', renderOverlayAtCurrentTime);
-  $video.addEventListener('loadedmetadata', renderOverlayAtCurrentTime);
+  $video.addEventListener('loadedmetadata', () => {
+    const selected = moments[current];
+    if (selected) {
+      try { $video.currentTime = selected.t; } catch { /* video not seekable yet */ }
+    }
+    renderOverlayAtCurrentTime();
+  });
 
   $prev.addEventListener('click', () => selectIndex(current - 1));
   $next.addEventListener('click', () => selectIndex(current + 1));
@@ -416,12 +406,10 @@ export function renderReview(
 
 // ── Bone-based mistake / positive markers over the video ──
 //
-// Chess.com-style: draw a coloured LINE along the body part causing the moment
-// (forearm for gesture, eye-line for gaze, spine for posture, …). The line's
-// colour encodes the moment's quality — green for excellent/brilliant, orange
-// for mistake, red for blunder, etc. A "?"/"??"/"?!"/"★" glyph sits at the
-// midpoint of the (first) bone so the user reads both the *what* and the *where*
-// in a single glance.
+// Draw a compact body-tracking layer along the body part causing the moment:
+// forearm for gesture, eye/face frame for gaze/expression, upper-body frame for
+// posture. The marker is intentionally label-based, not a huge punctuation glyph,
+// so the video still reads like a coaching product instead of a debug overlay.
 //
 // Verbal axes (delivery / logic) still use the caption-strip fallback below the
 // video — subtitle word-highlight handles those.
@@ -456,9 +444,17 @@ function pickBones(m: AnnotatedMoment, snap: LandmarkSnapshot): Bone[] {
       x: (p.leftShoulder.x + p.rightShoulder.x) / 2,
       y: (p.leftShoulder.y + p.rightShoulder.y) / 2,
     };
+    const midHip: Point2 = {
+      x: (p.leftHip.x + p.rightHip.x) / 2,
+      y: (p.leftHip.y + p.rightHip.y) / 2,
+    };
     return [
-      { a: p.head, b: midShoulder },               // spine
+      { a: p.head, b: midShoulder },               // neck
+      { a: midShoulder, b: midHip },               // spine
       { a: p.leftShoulder, b: p.rightShoulder },   // shoulder line
+      { a: p.leftHip, b: p.rightHip },             // hip line
+      { a: p.leftShoulder, b: p.leftHip },         // torso side
+      { a: p.rightShoulder, b: p.rightHip },       // torso side
     ];
   };
 
@@ -547,23 +543,15 @@ function renderMistakeMarkers(
   const placedGlyphs: Array<{ x: number; y: number }> = [];
 
   for (const m of moments) {
-    const mark = QUALITY_MARK[m.quality];
-    if (!mark) continue;
     const meta = QUALITY_META[m.quality];
     const isCaption = m.axis === 'delivery' || m.axis === 'logic';
 
-    // Caption-strip moments: skip bone, drop glyph in the verbal strip
+    // Caption-strip moments: skip bone, drop a compact badge in the verbal strip
     // (subtitle word-highlight does the precise "what word" pinpointing).
     if (isCaption) {
       const [px, py] = AXIS_REGION[m.axis] ?? AXIS_REGION.gesture;
       const positioned = staggerIfNeeded(px, py, placedGlyphs);
-      const el = document.createElement('div');
-      el.className = `mistake-marker mistake-${m.quality} mistake-marker-caption`;
-      el.textContent = mark;
-      el.style.color = meta.color;
-      el.style.left = `${positioned.x}%`;
-      el.style.top = `${positioned.y}%`;
-      overlay.appendChild(el);
+      overlay.appendChild(renderMarkerBadge(m, meta, positioned.x, positioned.y, true));
       continue;
     }
 
@@ -576,24 +564,18 @@ function renderMistakeMarkers(
     // had B-roll / title cards without a visible person).
     if (bones.length === 0) continue;
 
-    // Draw every bone in the group — full arm for gesture, upper-body frame
-    // (spine + shoulder line) for posture, eye-line + nose-to-mouth for face.
+    // Draw every bone in the group with a soft track underlay, a crisp core
+    // line, and joint dots. This reads as a body skeleton instead of a random
+    // decorative stroke on the video.
     for (const bone of bones) {
-      const line = document.createElementNS(svgNS, 'line');
-      line.setAttribute('x1', String(bone.a.x * 100));
-      line.setAttribute('y1', String(bone.a.y * 100));
-      line.setAttribute('x2', String(bone.b.x * 100));
-      line.setAttribute('y2', String(bone.b.y * 100));
-      line.setAttribute('stroke', meta.color);
-      line.setAttribute('stroke-width', '8');
-      line.setAttribute('stroke-linecap', 'round');
-      line.setAttribute('vector-effect', 'non-scaling-stroke');
-      line.setAttribute('class', `mistake-bone mistake-${m.quality}`);
-      svg.appendChild(line);
+      svg.appendChild(createBoneLine(svgNS, bone, meta.color, 'mistake-bone-track'));
+      svg.appendChild(createBoneLine(svgNS, bone, meta.color, 'mistake-bone-core'));
+      svg.appendChild(createJoint(svgNS, bone.a, meta.color));
+      svg.appendChild(createJoint(svgNS, bone.b, meta.color));
     }
 
-    // Glyph sits at the centroid of all bone midpoints — a stable anchor
-    // even when the group has 2-4 segments (full arm vs spine etc.).
+    // Badge sits just above the centroid of all bone midpoints — stable even
+    // when the group has many segments.
     let cx = 0, cy = 0;
     for (const b of bones) {
       cx += (b.a.x + b.b.x) / 2;
@@ -602,19 +584,67 @@ function renderMistakeMarkers(
     cx = (cx / bones.length) * 100;
     cy = (cy / bones.length) * 100;
     const positioned = staggerIfNeeded(cx, cy, placedGlyphs);
-    const el = document.createElement('div');
-    el.className = `mistake-marker mistake-${m.quality}`;
-    el.textContent = mark;
-    el.style.color = meta.color;
-    el.style.left = `${positioned.x}%`;
-    // Lift the glyph slightly above the centroid so it sits above the bones.
-    el.style.top = `calc(${positioned.y}% - 24px)`;
-    overlay.appendChild(el);
+    overlay.appendChild(renderMarkerBadge(m, meta, positioned.x, Math.max(8, positioned.y - 8), false));
   }
 
   // Append SVG once after collecting all bones (avoids z-order surprises —
   // marker divs naturally render on top of the earlier SVG sibling).
   overlay.insertBefore(svg, overlay.firstChild);
+}
+
+function createBoneLine(
+  svgNS: string,
+  bone: Bone,
+  color: string,
+  className: string,
+): SVGLineElement {
+  const line = document.createElementNS(svgNS, 'line') as SVGLineElement;
+  line.setAttribute('x1', String(bone.a.x * 100));
+  line.setAttribute('y1', String(bone.a.y * 100));
+  line.setAttribute('x2', String(bone.b.x * 100));
+  line.setAttribute('y2', String(bone.b.y * 100));
+  line.setAttribute('stroke', color);
+  line.setAttribute('stroke-linecap', 'round');
+  line.setAttribute('vector-effect', 'non-scaling-stroke');
+  line.setAttribute('class', className);
+  return line;
+}
+
+function createJoint(svgNS: string, point: Point2, color: string): SVGCircleElement {
+  const circle = document.createElementNS(svgNS, 'circle') as SVGCircleElement;
+  circle.setAttribute('cx', String(point.x * 100));
+  circle.setAttribute('cy', String(point.y * 100));
+  circle.setAttribute('r', '1.15');
+  circle.setAttribute('fill', color);
+  circle.setAttribute('class', 'mistake-joint');
+  return circle;
+}
+
+function renderMarkerBadge(
+  m: AnnotatedMoment,
+  meta: { color: string; label: string },
+  x: number,
+  y: number,
+  caption: boolean,
+): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = `analysis-marker quality-${m.quality}${caption ? ' analysis-marker-caption' : ''}`;
+  el.style.setProperty('--marker-color', meta.color);
+  el.style.left = `${clampPct(x)}%`;
+  el.style.top = `${clampPct(y)}%`;
+  el.innerHTML = `
+    <span class="analysis-marker-dot"></span>
+    <span class="analysis-marker-copy">
+      <strong>${escapeHtml(AXIS_LABEL[m.axis] ?? m.axis)}</strong>
+      <em>${escapeHtml(meta.label)}</em>
+    </span>
+  `;
+  el.title = m.title;
+  return el;
+}
+
+function clampPct(v: number): number {
+  return Math.max(4, Math.min(96, v));
 }
 
 /** Returns a non-overlapping position for a new glyph; shifts right in

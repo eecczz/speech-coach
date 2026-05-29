@@ -10,7 +10,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
-    <link rel="stylesheet" crossorigin href="/assets/brand-CZ3o_Puc.css">
+    <link rel="stylesheet" crossorigin href="/assets/brand-CdEYdkoV.css">
   </head>
   <body>
     <main class="container app-shell">
@@ -152,6 +152,16 @@
         online: '카메라를 보는 순간을 의식적으로 조금 늘려보세요.',
         free: '오늘 고치고 싶은 습관 하나만 정해도 충분해요.',
       };
+      const scenarioValue = {
+        presentation: 'presentation',
+        interview: 'interview',
+        negotiation: 'presentation',
+        persuasion: 'presentation',
+        daily: 'casual',
+        phone: 'customer_service',
+        online: 'presentation',
+        free: 'presentation',
+      };
 
       function syncThemeToggle() {
         const theme = document.documentElement.dataset.theme || 'light';
@@ -202,8 +212,9 @@
       document.getElementById('btn-go').addEventListener('click', () => {
         const name = encodeURIComponent(projectName.value.trim() || '오늘의 말하기 연습');
         const type = encodeURIComponent(typeSelect.value || 'free');
+        const scenario = encodeURIComponent(scenarioValue[typeSelect.value] || 'presentation');
         const goal = encodeURIComponent(getSelectedFocus().join(', ') || '말 속도');
-        location.href = `practice.html?project=${name}&type=${type}&goal=${goal}`;
+        location.href = `practice.html?project=${name}&type=${type}&scenario=${scenario}&goal=${goal}`;
       });
 
       syncThemeToggle();

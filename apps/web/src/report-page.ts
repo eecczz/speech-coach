@@ -5,7 +5,8 @@ declare const Chart: any;
 
 const themeToggle = document.querySelector('[data-theme-toggle]') as HTMLButtonElement | null;
 const retryLink = document.getElementById('retry-link') as HTMLAnchorElement | null;
-const reportTitle = document.getElementById('report-title') as HTMLElement | null;
+const reportHeading = document.getElementById('report-heading') as HTMLElement | null;
+const reportSubtitle = document.getElementById('report-subtitle') as HTMLElement | null;
 const focusLine = document.getElementById('report-focus-line') as HTMLElement | null;
 const currentScoreEl = document.getElementById('current-score') as HTMLElement | null;
 const targetScoreEl = document.getElementById('target-score') as HTMLElement | null;
@@ -128,7 +129,8 @@ function render() {
   const axisScores = getDisplayAxisScores(session.report);
   const goalText = session.goal.length ? session.goal.join(', ') : '말하기 흐름';
 
-  if (reportTitle) reportTitle.textContent = session.project;
+  if (reportHeading) reportHeading.textContent = session.project;
+  if (reportSubtitle) reportSubtitle.textContent = `${session.project} 리포트`;
   if (focusLine) focusLine.textContent = `이번 연습에서는 ${goalText}를 중심으로 돌아봤어요.`;
   if (currentScoreEl) currentScoreEl.textContent = `${Math.round(session.report.accuracy_overall)}`;
   if (targetScoreEl) targetScoreEl.textContent = `${Math.round(targetScore)}`;

@@ -604,3 +604,8 @@ export function getLandmarksAtTime(tSec: number, tolSec = 1.5): LandmarkSnapshot
 export function getLandmarkBuffer(): readonly LandmarkSnapshot[] {
   return landmarkBuf;
 }
+
+export function replaceLandmarkBuffer(snapshots: LandmarkSnapshot[]): void {
+  landmarkBuf.length = 0;
+  landmarkBuf.push(...snapshots);
+}

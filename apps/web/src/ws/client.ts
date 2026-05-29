@@ -1,7 +1,3 @@
-// Simple aggregator client: opens WS to /ws/signals, sends 5fps vision frames.
-// Resilient to disconnects — drops frames silently when closed (we'd rather lose a frame
-// than crash the practice page mid-session).
-
 import type { VisionFrame } from '../signals/compute';
 
 export interface ProsodyFrame {
@@ -39,7 +35,6 @@ export interface AggregatorClient {
   start(sessionId: string, scenario?: string): Promise<void>;
   sendVision(frame: VisionFrame): void;
   sendProsody(frame: ProsodyFrame): void;
-  /** Optional audio analysis result (from /analyze) gets merged into the bundle. */
   end(audioResult?: AudioAnalysisResult | null): Promise<unknown>;
   close(): void;
 }
@@ -77,15 +72,14 @@ export function createAggregatorClient(opts: {
   httpBase?: string;
   wsBase?: string;
 } = {}): AggregatorClient {
-  const httpBase = opts.httpBase ?? ''; // Vite dev proxy handles /session/* and /ws/signals
-  const wsBase = opts.wsBase ?? '';
+  const httpBase = opts.httpBase ?? defaultAggregatorHttpBase();
+  const wsBase = opts.wsBase ?? defaultAggregatorWsUrl();
   let ws: WebSocket | null = null;
   let sessionId: string | null = null;
 
   return {
     async start(sid, scenario = 'presentation') {
       sessionId = sid;
-      // 1. POST /session/start (REST) — scenario picks the coach's rubric YAML.
       try {
         const r = await fetch(`${httpBase}/session/start`, {
           method: 'POST',
@@ -98,7 +92,6 @@ export function createAggregatorClient(opts: {
         return;
       }
 
-      // 2. Open WebSocket for signal stream.
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const url = wsBase || `${proto}//${location.host}/ws/signals`;
       ws = new WebSocket(url);
@@ -119,8 +112,8 @@ export function createAggregatorClient(opts: {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       try {
         ws.send(JSON.stringify({ kind: 'vision', data: frame }));
-      } catch (e) {
-        // Silently drop — frame loss is acceptable.
+      } catch {
+        // Drop frame quietly.
       }
     },
 
@@ -128,8 +121,8 @@ export function createAggregatorClient(opts: {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       try {
         ws.send(JSON.stringify({ kind: 'prosody', data: frame }));
-      } catch (e) {
-        // Silently drop.
+      } catch {
+        // Drop frame quietly.
       }
     },
 
@@ -148,7 +141,7 @@ export function createAggregatorClient(opts: {
 }
 
 export function createHudClient(opts: { wsBase?: string } = {}): HudClient {
-  const wsBase = opts.wsBase ?? '';
+  const wsBase = opts.wsBase ?? defaultHudWsUrl();
   let ws: WebSocket | null = null;
   let keepalive: number | null = null;
 
@@ -187,4 +180,35 @@ export function createHudClient(opts: { wsBase?: string } = {}): HudClient {
       }
     },
   };
+}
+
+function defaultAggregatorHttpBase(): string {
+  return location.port === '8000' ? originWithPort('8001') : '';
+}
+
+function defaultAggregatorWsUrl(): string {
+  return location.port === '8000' ? wsUrlWithPort('8001', '/ws/signals') : '';
+}
+
+function defaultHudWsUrl(): string {
+  return location.port === '8000' ? wsUrlWithPort('8001', '/ws/hud') : '';
+}
+
+function wsUrlWithPort(port: string, pathname: string): string {
+  const url = new URL(location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.port = port;
+  url.pathname = pathname;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+function originWithPort(port: string): string {
+  const url = new URL(location.href);
+  url.port = port;
+  url.pathname = '';
+  url.search = '';
+  url.hash = '';
+  return url.origin;
 }

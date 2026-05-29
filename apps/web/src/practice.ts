@@ -20,7 +20,10 @@ const debug = document.getElementById('debug') as HTMLPreElement;
 const camSelect = document.getElementById('cam-select') as HTMLSelectElement;
 const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
+const btnAnalyze = document.getElementById('btn-analyze') as HTMLButtonElement;
 const recorded = document.getElementById('recorded') as HTMLVideoElement;
+const timerEl = document.querySelector('.timer') as HTMLDivElement | null;
+const recordBadge = document.querySelector('.record-badge') as HTMLDivElement | null;
 
 const params = new URLSearchParams(location.search);
 const projectName = params.get('project') || '오늘의 말하기 연습';
@@ -47,8 +50,6 @@ const SCENARIO_MAP: Record<string, string> = {
   free: 'presentation',
 };
 
-// Common virtual-camera label fragments. We avoid these on first try because
-// they often output a privacy filter or static image, not the actual user.
 const VIRTUAL_HINTS = ['virtual', 'mirametrix', 'obs', 'snap', 'nvidia broadcast', 'xsplit', 'manycam'];
 
 function isLikelyVirtual(label: string): boolean {
@@ -57,7 +58,6 @@ function isLikelyVirtual(label: string): boolean {
 }
 
 async function acquireStream(preferredDeviceId?: string): Promise<MediaStream> {
-  // First call: ask for permission with default device so labels become readable.
   if (!preferredDeviceId) {
     let scratch: MediaStream | null = null;
     try {
@@ -65,7 +65,6 @@ async function acquireStream(preferredDeviceId?: string): Promise<MediaStream> {
     } catch (e) {
       throw e;
     }
-    // Enumerate to pick a non-virtual camera if the default is virtual.
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cams = devices.filter((d) => d.kind === 'videoinput');
     console.log('[practice] cameras:', cams.map((c) => `${c.label}${isLikelyVirtual(c.label) ? ' [VIRTUAL]' : ''}`));
@@ -79,16 +78,14 @@ async function acquireStream(preferredDeviceId?: string): Promise<MediaStream> {
         scratch.getTracks().forEach((t) => t.stop());
         camSelect.value = real.deviceId;
         return acquireStream(real.deviceId);
-      } else {
-        console.warn('[practice] only virtual cameras found — proceeding with virtual; preview will likely be blank');
       }
+      console.warn('[practice] only virtual cameras found — proceeding with virtual; preview will likely be blank');
     } else {
       camSelect.value = cams.find((c) => c.label === currentLabel)?.deviceId ?? '';
     }
     return scratch;
   }
 
-  // Targeted re-acquire with a specific device.
   return navigator.mediaDevices.getUserMedia({
     video: { deviceId: { exact: preferredDeviceId }, width: 640, height: 480 },
     audio: { echoCancellation: true, noiseSuppression: true },
@@ -108,6 +105,26 @@ function populateCamSelect(cams: MediaDeviceInfo[]): void {
 function setStatus(msg: string) {
   status.textContent = msg;
   console.log('[practice]', msg);
+}
+
+function formatClock(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function setTimer(seconds: number): void {
+  if (timerEl) timerEl.textContent = formatClock(seconds);
+}
+
+function setRecordBadge(label: string, state: 'idle' | 'recording' | 'done' = 'idle'): void {
+  if (!recordBadge) return;
+  recordBadge.dataset.state = state;
+  const dot = recordBadge.querySelector('span');
+  recordBadge.textContent = '';
+  if (dot) recordBadge.appendChild(dot);
+  recordBadge.append(label);
 }
 
 function setHudCard(
@@ -205,6 +222,8 @@ async function bootstrap() {
 
   setStatus('준비됨 — 거울처럼 따라옵니다. 녹화를 시작하면 webm 저장됩니다.');
   btnStart.disabled = false;
+  setTimer(0);
+  setRecordBadge('대기 중');
   resetHudCards();
 
   const recorder = new AvatarRecorder();
@@ -215,14 +234,7 @@ async function bootstrap() {
   let lastSignalSendT = 0;
   let lastProsodySendT = 0;
   let silenceDetector: SilenceDetector | null = null;
-  // Outer scope so btnStop can pass it into /analyze (associates the audio
-  // analysis with the recording session).
   let sessionId = '';
-  // Pauses the live tick's MediaPipe + avatar pipeline while the uploaded-video
-  // flow drives the same landmarkers on its hidden probe video. Two sources
-  // calling detectForVideo with interleaved timestamps would break MP's
-  // monotonicity guard. Set false to suspend live detect, true to resume.
-  let liveDetect = true;
   const scenario = SCENARIO_MAP[typeName] || 'presentation';
 
   await hudClient.connect((payload) => {
@@ -231,11 +243,14 @@ async function bootstrap() {
 
   btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
+    btnAnalyze.disabled = true;
+    setTimer(0);
+    setRecordBadge('녹화 중', 'recording');
     setStatus('세션 시작 중…');
     sessionId = `sess_${Date.now()}`;
     resetSignalState();
     await aggregator.start(sessionId, scenario);
-    recorder.start(stream); // record the user's video+audio directly (avatar canvas is hidden)
+    recorder.start(stream);
     silenceDetector = new SilenceDetector(stream);
     silenceDetector.start();
     recording = true;
@@ -256,6 +271,9 @@ async function bootstrap() {
     }
     const rec = await recorder.stop();
     recorded.src = rec.url;
+    setTimer(rec.durationMs / 1000);
+    setRecordBadge('녹화 완료', 'done');
+
     try {
       setStatus('코칭 화면으로 이동 중…');
       const mediaId = await savePendingMedia(rec.blob, `${sessionId}.webm`, rec.blob.type || 'video/webm');
@@ -286,44 +304,40 @@ async function bootstrap() {
     }
   });
 
-  const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
-  const analyzeUploadBtn = document.getElementById('btn-analyze') as HTMLButtonElement | null;
-  if (uploadInput && analyzeUploadBtn) {
-    analyzeUploadBtn.addEventListener('click', async () => {
-      const file = uploadInput.files?.[0];
-      if (!file) return;
-      analyzeUploadBtn.disabled = true;
-      try {
-        const sessionKey = `upload_${Date.now()}`;
-        const mediaId = await savePendingMedia(file, file.name, file.type || 'video/mp4');
-        setPendingAnalysis({
-          sessionId: sessionKey,
-          project: projectName,
-          goal: goals,
-          type: typeName,
-          source: 'upload',
-          createdAt: new Date().toISOString(),
-          mediaId,
-          filename: file.name,
-          mimeType: file.type || 'video/mp4',
-          scenario,
-        });
-        const next = new URL('loading.html', location.href);
-        next.searchParams.set('session', sessionKey);
-        next.searchParams.set('source', 'upload');
-        next.searchParams.set('project', projectName);
-        next.searchParams.set('goal', goals.join(', '));
-        next.searchParams.set('type', typeName);
-        location.href = next.toString();
-      } catch (e) {
-        console.error('[practice] failed to queue uploaded analysis', e);
-        analyzeUploadBtn.disabled = false;
-        setStatus('업로드 영상을 준비하지 못했어요. 다시 시도해주세요.');
-      }
-    });
-  }
+  btnAnalyze.addEventListener('click', async () => {
+    const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
+    const file = uploadInput?.files?.[0];
+    if (!file) return;
+    btnAnalyze.disabled = true;
+    try {
+      const sessionKey = `upload_${Date.now()}`;
+      const mediaId = await savePendingMedia(file, file.name, file.type || 'video/mp4');
+      setPendingAnalysis({
+        sessionId: sessionKey,
+        project: projectName,
+        goal: goals,
+        type: typeName,
+        source: 'upload',
+        createdAt: new Date().toISOString(),
+        mediaId,
+        filename: file.name,
+        mimeType: file.type || 'video/mp4',
+        scenario,
+      });
+      const next = new URL('loading.html', location.href);
+      next.searchParams.set('session', sessionKey);
+      next.searchParams.set('source', 'upload');
+      next.searchParams.set('project', projectName);
+      next.searchParams.set('goal', goals.join(', '));
+      next.searchParams.set('type', typeName);
+      location.href = next.toString();
+    } catch (e) {
+      console.error('[practice] failed to queue uploaded analysis', e);
+      btnAnalyze.disabled = false;
+      setStatus('업로드 영상을 준비하지 못했어요. 다시 시도해주세요.');
+    }
+  });
 
-  // Animation loop with diagnostics
   let lastT = performance.now();
   let frames = 0;
   let lastFpsT = performance.now();
@@ -333,9 +347,8 @@ async function bootstrap() {
   let handCount = 0;
   let detectError: string | null = null;
   let lastTs = -1;
-  let pixelMean = -1; // sampled brightness of current camera frame, 0..255
+  let pixelMean = -1;
 
-  // Off-screen canvas for sampling video pixel content (verifies frames are non-black).
   const probe = document.createElement('canvas');
   probe.width = 64;
   probe.height = 48;
@@ -357,8 +370,7 @@ async function bootstrap() {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    if (ready && vw > 0 && vh > 0 && liveDetect) {
-      // Sample frame brightness every ~10 frames to verify camera isn't black.
+    if (ready && vw > 0 && vh > 0) {
       if (probeFrame++ % 10 === 0) {
         probeCtx.drawImage(video, 0, 0, probe.width, probe.height);
         const data = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
@@ -369,8 +381,6 @@ async function bootstrap() {
         pixelMean = sum / (data.length / 4) / 3;
       }
 
-      // MediaPipe requires strictly monotonic timestamps. Skipped entirely when
-      // liveDetect=false (upload-analyze takes over the landmarker).
       const ts = Math.max(Math.floor(now), lastTs + 1);
       lastTs = ts;
       try {
@@ -386,15 +396,14 @@ async function bootstrap() {
           applyFaceToFallback(stage.fallback, face);
         }
 
-        // Push 5fps vision signals to aggregator while recording.
         if (recording) {
           const sessionT = now / 1000 - recordingStartTSec;
+          setTimer(sessionT);
           if (sessionT - lastSignalSendT >= 0.2) {
             const frame = computeVisionFrame(sessionT, face, pose, hand);
             aggregator.sendVision(frame);
             lastSignalSendT = sessionT;
           }
-          // Push prosody (silence) frame every ~1s.
           if (silenceDetector && sessionT - lastProsodySendT >= 1.0) {
             const { silenceSeconds, rmsMean } = silenceDetector.snapshot();
             aggregator.sendProsody({
@@ -425,7 +434,6 @@ async function bootstrap() {
       (detectError ? `\nERR ${detectError}` : '');
     debug.textContent = debugLine;
     if (now - lastFpsT < 50) {
-      // ~once per second, dump to console too
       console.log('[debug]', debugLine.replace(/\n/g, ' | '));
     }
 
@@ -434,7 +442,6 @@ async function bootstrap() {
   };
   requestAnimationFrame(tick);
 
-  // Beforeunload guard: prevent accidental nav while recording
   window.addEventListener('beforeunload', (e) => {
     if (recording) {
       e.preventDefault();
@@ -446,7 +453,6 @@ async function bootstrap() {
     hudClient.close();
     aggregator.close();
   });
-
 }
 
 bootstrap().catch((err) => {
@@ -464,5 +470,3 @@ bootstrap().catch((err) => {
     setStatus(`초기화 실패: ${err instanceof Error ? err.message : String(err)}`);
   }
 });
-
-// (uploadForAnalysis moved to ./audio-upload.ts — shared with upload-analyze flow.)
