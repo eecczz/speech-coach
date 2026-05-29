@@ -4,6 +4,7 @@ export interface ProsodyFrame {
   t_start: number;
   t_end: number;
   wpm?: number;
+  word_count?: number;
   filler_count?: number;
   filler_terms?: string[];
   pause_seconds?: number;
@@ -32,7 +33,7 @@ export interface LiveHudResponse {
 }
 
 export interface AggregatorClient {
-  start(sessionId: string, scenario?: string): Promise<void>;
+  start(sessionId: string, scenario?: string, focusGoals?: string[]): Promise<void>;
   sendVision(frame: VisionFrame): void;
   sendProsody(frame: ProsodyFrame): void;
   end(audioResult?: AudioAnalysisResult | null): Promise<unknown>;
@@ -78,13 +79,13 @@ export function createAggregatorClient(opts: {
   let sessionId: string | null = null;
 
   return {
-    async start(sid, scenario = 'presentation') {
+    async start(sid, scenario = 'presentation', focusGoals: string[] = []) {
       sessionId = sid;
       try {
         const r = await fetch(`${httpBase}/session/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sid, scenario }),
+          body: JSON.stringify({ session_id: sid, scenario, focus_goals: focusGoals }),
         });
         if (!r.ok) console.warn('[ws] session/start failed', r.status);
       } catch (e) {

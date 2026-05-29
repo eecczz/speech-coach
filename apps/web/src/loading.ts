@@ -135,6 +135,7 @@ async function run() {
       const aggregator = createAggregatorClient();
       report = await analyzeUploadedVideo(file, {
         scenario: pending.scenario,
+        focusGoals: pending.goal ?? [],
         landmarkers,
         aggregator,
         setStatus,

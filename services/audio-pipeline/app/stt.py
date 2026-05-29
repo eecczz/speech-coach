@@ -107,6 +107,7 @@ class STT:
             result = client.audio.transcriptions.create(
                 model=self.model_name,
                 file=f,
+                language=language,
             )
         elapsed = time.perf_counter() - t0
         plain = _to_plain(result)

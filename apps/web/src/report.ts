@@ -9,6 +9,7 @@ const focusLine = document.getElementById('report-focus-line') as HTMLElement;
 const statusBox = document.getElementById('report-status') as HTMLElement;
 const review = document.getElementById('review') as HTMLElement;
 const retryLink = document.getElementById('retry-link') as HTMLAnchorElement;
+const printButton = document.getElementById('print-link') as HTMLButtonElement;
 const themeToggle = document.querySelector('[data-theme-toggle]') as HTMLButtonElement;
 
 function syncThemeToggle(): void {
@@ -22,6 +23,10 @@ themeToggle.addEventListener('click', () => {
   document.documentElement.dataset.theme = nextTheme;
   localStorage.setItem('speakup-theme', nextTheme);
   syncThemeToggle();
+});
+
+printButton.addEventListener('click', () => {
+  window.print();
 });
 
 async function main(): Promise<void> {

@@ -31,6 +31,10 @@ themeToggle?.addEventListener('click', () => {
   syncThemeToggle();
 });
 
+document.getElementById('print-link')?.addEventListener('click', () => {
+  window.print();
+});
+
 document.querySelector('[data-close-modal]')?.addEventListener('click', () => {
   (document.getElementById('video-modal') as HTMLDialogElement | null)?.close();
 });

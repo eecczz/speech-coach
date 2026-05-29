@@ -29,11 +29,60 @@ POSTURE_SWAY_REFERENCE = 0.06    # sway above this = 0 score
 EXPRESSION_DIVERSITY_TARGET = 1.5
 GESTURE_IDEAL_LO = 0.15           # fraction of frames with hand movement
 GESTURE_IDEAL_HI = 0.55
+DELIVERY_WPM_IDEAL_LO = 110.0
+DELIVERY_WPM_IDEAL_HI = 170.0
+FILLER_OK_PER_MIN = 4.0
+LONG_PAUSE_S = 3.0
 
 
 def _avg(xs):
     xs = list(xs)
     return sum(xs) / len(xs) if xs else 0.0
+
+
+def _clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
+    return max(lo, min(hi, v))
+
+
+def _delivery_score(session: Session) -> tuple[float, str]:
+    pfs = session.prosody_frames
+    duration_min = max(0.001, session.duration_s / 60.0)
+    word_count = sum(getattr(p, "word_count", 0) for p in pfs)
+    if word_count > 0:
+        avg_wpm = word_count / duration_min
+    else:
+        weighted_seconds = sum(max(0.0, p.t_end - p.t_start) for p in pfs if p.wpm > 0)
+        avg_wpm = (
+            sum(p.wpm * max(0.0, p.t_end - p.t_start) for p in pfs if p.wpm > 0)
+            / weighted_seconds
+            if weighted_seconds > 0 else 0.0
+        )
+
+    speed_error = max(DELIVERY_WPM_IDEAL_LO - avg_wpm, avg_wpm - DELIVERY_WPM_IDEAL_HI, 0.0)
+    speed_score = _clamp(100.0 - speed_error * 1.2)
+
+    filler_per_min = sum(p.filler_count for p in pfs) / duration_min
+    filler_score = _clamp(100.0 - max(0.0, filler_per_min - FILLER_OK_PER_MIN) * 10.0)
+
+    pauses = [p.pause_seconds for p in pfs if p.pause_seconds >= LONG_PAUSE_S]
+    pause_penalty = min(45.0, len(pauses) * 12.0 + max(0.0, sum(pauses) - 6.0) * 2.0)
+    pause_score = _clamp(100.0 - pause_penalty)
+
+    pitch_sds = [p.pitch_sd_semitones for p in pfs if p.pitch_sd_semitones is not None]
+    if pitch_sds:
+        pitch_sd = _avg(pitch_sds)
+        expressiveness_score = _clamp((pitch_sd - 1.0) / 2.5 * 100.0)
+    else:
+        expressiveness_score = 70.0
+
+    score = (
+        speed_score * 0.35
+        + filler_score * 0.25
+        + pause_score * 0.25
+        + expressiveness_score * 0.15
+    )
+    note = f"평균 말 속도 분당 {avg_wpm:.0f}어절, 필러 {filler_per_min:.1f}회/분, 긴 침묵 {len(pauses)}회"
+    return round(_clamp(score), 1), note
 
 
 def compute_axis_accuracies(session: Session) -> List[AxisAccuracy]:
@@ -54,7 +103,7 @@ def compute_axis_accuracies(session: Session) -> List[AxisAccuracy]:
 
     # Gaze: central fixation ratio averaged, scaled to 100.
     gaze = _avg(f.gaze_fixation_ratio for f in vfs) * 100
-    out.append(AxisAccuracy(axis="gaze", score=round(gaze, 1)))
+    out.append(AxisAccuracy(axis="gaze", score=round(gaze, 1), note=f"정면을 바라본 비율 {gaze:.0f}%"))
 
     # Posture: penalty for sway + head tilt + chin-on-hand.
     sway = _avg(f.posture_sway for f in vfs)
@@ -65,26 +114,33 @@ def compute_axis_accuracies(session: Session) -> List[AxisAccuracy]:
     tilt_frames = sum(1 for f in vfs if abs(f.head_roll_deg) > 12)
     tilt_penalty = min(30, tilt_frames / max(1, len(vfs)) * 120)
     posture = max(0.0, sway_score - chin_penalty - tilt_penalty)
-    out.append(AxisAccuracy(axis="posture", score=round(posture, 1)))
+    out.append(
+        AxisAccuracy(
+            axis="posture",
+            score=round(posture, 1),
+            note=f"자세 흔들림 {sway:.3f}, 턱 괴기 {chin_frames}프레임, 머리 기울임 {tilt_frames}프레임",
+        )
+    )
 
     # Expression: normalize diversity entropy to 0..100.
-    exp = min(100.0, _avg(f.expression_diversity for f in vfs) / EXPRESSION_DIVERSITY_TARGET * 100)
-    out.append(AxisAccuracy(axis="expression", score=round(exp, 1)))
+    exp_mean = _avg(f.expression_diversity for f in vfs)
+    exp = min(100.0, exp_mean / EXPRESSION_DIVERSITY_TARGET * 100)
+    out.append(AxisAccuracy(axis="expression", score=round(exp, 1), note=f"표정 변화량 {exp_mean:.2f}"))
 
     # Gesture: fraction of frames where hand_gesture_freq is in the ideal band.
     in_band = sum(1 for f in vfs if GESTURE_IDEAL_LO <= f.hand_gesture_freq <= GESTURE_IDEAL_HI)
     gesture = (in_band / len(vfs)) * 100
-    out.append(AxisAccuracy(axis="gesture", score=round(gesture, 1)))
+    out.append(AxisAccuracy(axis="gesture", score=round(gesture, 1), note=f"적정 손동작 구간 {gesture:.0f}%"))
 
-    # Delivery: needs STT for WPM/filler. Without it we have only silence_seconds
-    # which is too narrow to score "전달력" properly — mark unavailable.
+    # Delivery: score from measured WPM, filler density, long pauses, and pitch variety.
     if has_transcript and session.prosody_frames:
-        out.append(AxisAccuracy(axis="delivery", score=50.0, note="간이 추정 (Phase 2)"))
+        score, note = _delivery_score(session)
+        out.append(AxisAccuracy(axis="delivery", score=score, note=note))
     else:
         out.append(AxisAccuracy(axis="delivery", score=0, available=False, note="STT 미수집"))
 
     if has_transcript:
-        out.append(AxisAccuracy(axis="logic", score=50.0, note="간이 추정 (Phase 2)"))
+        out.append(AxisAccuracy(axis="logic", score=50.0, note="전사 텍스트 기반 구조 평가는 간이 추정"))
     else:
         out.append(AxisAccuracy(axis="logic", score=0, available=False, note="STT 미수집"))
 
@@ -104,6 +160,7 @@ def compute_overall_accuracy(axes: List[AxisAccuracy]) -> float:
 # Quality may be upgraded based on event.metrics (e.g., longer chin_on_hand → blunder).
 EVENT_QUALITY: Dict[EventKind, Tuple[str, QualityLevel, int]] = {
     EventKind.WPM_SPIKE: ("delivery", QualityLevel.MISTAKE, -10),
+    EventKind.WPM_SLOW: ("delivery", QualityLevel.INACCURACY, -7),
     EventKind.LONG_PAUSE: ("delivery", QualityLevel.INACCURACY, -5),
     EventKind.SILENCE_LONG: ("delivery", QualityLevel.MISTAKE, -10),
     EventKind.FILLER_BURST: ("delivery", QualityLevel.MISTAKE, -10),
@@ -148,13 +205,17 @@ def _upgrade_quality(ev: SemanticEvent, base: QualityLevel) -> QualityLevel:
     return base
 
 
-def annotate_moments(session: Session, max_moments: int = 20) -> List[AnnotatedMoment]:
+def annotate_moments(
+    session: Session,
+    max_moments: int = 20,
+    events: List[SemanticEvent] | None = None,
+) -> List[AnnotatedMoment]:
     """Convert L2 events → AnnotatedMoments. Also synthesize positive moments where
     multiple axes look great simultaneously."""
     out: List[AnnotatedMoment] = []
 
     # Negative moments from events
-    for ev in _flatten_events(session):
+    for ev in (events if events is not None else _flatten_events(session)):
         if ev.kind not in EVENT_QUALITY:
             continue
         axis, base_q, impact = EVENT_QUALITY[ev.kind]

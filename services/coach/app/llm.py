@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Optional
 
 from pydantic import ValidationError
 
 from packages.schema import SessionBundle, ComprehensiveReport
+from packages.schema.report import AnnotatedMoment, TranscriptCheck
 from .prompts import SYSTEM_PROMPT_BASE, OUTPUT_INSTRUCTION
 from .rubric import compose_scenario_block
 
@@ -25,6 +27,165 @@ def _compose_system_prompt(scenario: str) -> str:
     return f"{SYSTEM_PROMPT_BASE}\n\n{compose_scenario_block(scenario)}\n{OUTPUT_INSTRUCTION}"
 
 
+def _moment_key(moment: AnnotatedMoment) -> tuple[float, str, str, str]:
+    return (
+        round(moment.t, 2),
+        moment.axis,
+        str(moment.quality),
+        moment.title,
+    )
+
+
+def _same_rule_moment(a: AnnotatedMoment, b: AnnotatedMoment) -> bool:
+    return (
+        round(a.t, 2) == round(b.t, 2)
+        and a.axis == b.axis
+        and a.quality == b.quality
+        and a.title == b.title
+    )
+
+
+def _fallback_moment_comment(moment: AnnotatedMoment) -> str:
+    title = moment.title
+    if "말 속도 느림" in title:
+        return "이 구간은 말 속도가 느려 핵심 메시지의 긴장감이 떨어질 수 있습니다. 문장을 짧게 끊고 다음 핵심어로 바로 넘어가는 연습이 필요합니다."
+    if "말 속도 급상승" in title:
+        return "이 구간은 말이 갑자기 빨라져 청중이 내용을 따라가기 어려울 수 있습니다. 핵심 단어 앞에서 한 박자 늦추면 전달력이 안정됩니다."
+    if "침묵" in title:
+        return "말이 멈춘 시간이 길어져 흐름이 끊겨 보일 수 있습니다. 다음 문장 첫 단어를 미리 정해 두면 공백을 줄일 수 있습니다."
+    if "필러" in title:
+        return "필러 표현이 모여 나오면 준비가 덜 된 인상을 줄 수 있습니다. 불필요한 연결어 대신 짧은 침묵으로 호흡을 정리하세요."
+    if "시선" in title:
+        return "시선이 정면에서 벗어나 청중과의 연결감이 약해질 수 있습니다. 문장마다 한 번씩 카메라나 청중 중심을 확인하세요."
+    if "자세" in title or moment.axis == "posture":
+        return "자세가 안정되어 신뢰감을 주는 기반은 좋습니다. 이 안정감을 유지한 채 전달 속도와 시선 처리를 함께 끌어올리면 좋습니다."
+    if "표정" in title or moment.axis == "expression":
+        return "표정 변화가 살아 있어 메시지가 덜 딱딱하게 전달됩니다. 핵심 문장에서도 이 자연스러운 표정을 유지하세요."
+    if moment.impact >= 0:
+        return "이 구간은 강점으로 볼 수 있습니다. 같은 말하기 리듬을 다음 핵심 구간에도 유지하세요."
+    return "이 구간은 선택한 평가 축에서 개선이 필요한 순간입니다. 같은 구간을 다시 보며 원인을 확인하세요."
+
+
+TRANSCRIPT_CHECK_HINTS: tuple[tuple[str, str, str], ...] = (
+    (
+        r"공무전",
+        "공모전",
+        "대회/지원 맥락에서는 '공모전'일 가능성이 큽니다. 실제 발화와 STT 결과를 함께 확인하세요.",
+    ),
+    (
+        r"발악[이가의]?\s*스펀[드을]?",
+        "말하기 습관",
+        "문맥상 '말하기 습관'처럼 말하기 행동을 설명하는 표현이었을 가능성이 있습니다.",
+    ),
+    (
+        r"확인하게\s*하?기로\s*했다고",
+        "확인하기 어렵다고",
+        "문장 흐름상 '객관적으로 확인하기 어렵다'는 취지였는지 확인하면 좋습니다.",
+    ),
+    (
+        r"대격기",
+        "느꼈기",
+        "문장 끝 연결상 '느꼈기 때문입니다'가 STT에서 다르게 기록됐을 가능성이 있습니다.",
+    ),
+)
+
+
+def _normalize_phrase(text: str) -> str:
+    return re.sub(r"[\s.,!?\"'“”‘’()\[\]{}]+", "", text).lower()
+
+
+def _phrase_time_range(bundle: SessionBundle, phrase: str) -> tuple[float | None, float | None]:
+    target = _normalize_phrase(phrase)
+    if not target:
+        return None, None
+    words = bundle.words
+    for i in range(len(words)):
+        acc = ""
+        for j in range(i, min(i + 8, len(words))):
+            acc += _normalize_phrase(words[j].word)
+            if acc == target or target in acc:
+                return words[i].t_start, words[j].t_end
+            if len(acc) > len(target) + 8:
+                break
+    return None, None
+
+
+def _build_transcript_checks(bundle: SessionBundle) -> list[TranscriptCheck]:
+    transcript = bundle.full_transcript or ""
+    if not transcript.strip():
+        return []
+
+    checks: list[TranscriptCheck] = []
+    seen: set[str] = set()
+    for pattern, suggestion, reason in TRANSCRIPT_CHECK_HINTS:
+        for match in re.finditer(pattern, transcript):
+            phrase = match.group(0).strip()
+            key = _normalize_phrase(phrase)
+            if not phrase or key in seen:
+                continue
+            seen.add(key)
+            t_start, t_end = _phrase_time_range(bundle, phrase)
+            checks.append(
+                TranscriptCheck(
+                    phrase=phrase,
+                    suggestion=suggestion,
+                    reason=reason,
+                    t_start=t_start,
+                    t_end=t_end,
+                )
+            )
+            if len(checks) >= 3:
+                return checks
+    return checks
+
+
+def _soften_stt_uncertainty(text: str | None) -> str | None:
+    if not text:
+        return text
+    if not any(term in text for term in ("발화 오류", "발음 오류", "단어 오용", "비문", "딕션", "발음 훈련", "전사 텍스트", "의미 전달", "논리적 명료성")):
+        return text
+
+    softened = re.sub(
+        r"전사 텍스트\s*상으로?.*?(?:딕션 훈련이 필요합니다\.|명료성을 저해하고 있습니다\.|확인됩니다\.|보완이 필요합니다\.)",
+        "전사 텍스트 일부가 어색하게 기록되어 STT 오인식 가능성이 있으므로 언어와 논리 평가는 참고용으로 확인해야 합니다.",
+        text,
+    )
+    softened = re.sub(
+        r"전사 텍스트\s*(?:상에서|상으로|기준으로|기준)?[^.]*?(?:의미 전달이 불분명|논리적 명료성|명료성 개선)[^.]*\.",
+        "전사 텍스트에 어색한 표현 후보가 있어 STT 오인식 가능성을 확인해야 하며, 언어와 논리 평가는 참고용으로 보는 것이 안전합니다.",
+        softened,
+    )
+    softened = re.sub(
+        r"일부 단어의 발음 오류\s*\([^)]*STT[^)]*\).*?(?:보완이 필요합니다\.|확인됩니다\.)",
+        "전사 텍스트 일부가 어색하게 기록되어 STT 오인식 가능성이 있으므로 언어와 논리 평가는 참고용으로 확인해야 합니다.",
+        softened,
+    )
+    softened = softened.replace("더딘 및 ", "")
+    softened = softened.replace("발화 오류", "전사 텍스트상 어색한 표현")
+    softened = softened.replace("발음 오류", "STT 오인식 가능 표현")
+    softened = softened.replace("단어 오용", "STT 오인식 가능 표현")
+    softened = softened.replace("비문", "STT 오인식 가능 문장")
+    softened = softened.replace("정확한 딕션 훈련이 필요합니다", "실제 발화와 STT 결과를 함께 확인해야 합니다")
+    softened = softened.replace("딕션 훈련이 필요합니다", "실제 발화와 STT 결과를 함께 확인해야 합니다")
+    softened = softened.replace("발음 훈련이 필요합니다", "실제 발화와 STT 결과를 함께 확인해야 합니다")
+    return softened
+
+
+def _sanitize_stt_uncertainty(report: ComprehensiveReport) -> None:
+    report.overall_summary = _soften_stt_uncertainty(report.overall_summary) or ""
+    for finding in [*report.top_priorities, *report.strengths, *report.improvements]:
+        finding.text = _soften_stt_uncertainty(finding.text) or finding.text
+        finding.suggestion = _soften_stt_uncertainty(finding.suggestion)
+    for prescription in report.training_prescriptions:
+        prescription.addresses = _soften_stt_uncertainty(prescription.addresses) or prescription.addresses
+        prescription.steps = [
+            _soften_stt_uncertainty(step) or step
+            for step in prescription.steps
+        ]
+    for clip in report.evidence_clips:
+        clip.reason = _soften_stt_uncertainty(clip.reason) or clip.reason
+
+
 def _backfill_from_bundle(report: ComprehensiveReport, bundle: SessionBundle) -> ComprehensiveReport:
     """LLM is told to pass rule-derived dashboard fields through verbatim. We enforce
     that here so a sloppy LLM can't break the dashboard."""
@@ -32,24 +193,28 @@ def _backfill_from_bundle(report: ComprehensiveReport, bundle: SessionBundle) ->
     report.accuracy_per_axis = bundle.accuracy_per_axis
     report.quality_buckets = bundle.quality_buckets
     report.score_timeline = bundle.score_timeline
+    _sanitize_stt_uncertainty(report)
 
-    # For annotated_moments: keep LLM's coach_comment but force-override the rule-derived
-    # fields. If LLM omitted moments entirely, fall back to bundle moments (no comments).
+    # For annotated_moments: keep LLM's coach_comment but force-override the
+    # rule-derived fields. Match by the full rule identity, not timestamp alone:
+    # multiple moments often start at 00:00, and timestamp-only matching can attach
+    # a posture comment to a delivery moment.
     if not report.annotated_moments:
         report.annotated_moments = list(bundle.annotated_moments)
     else:
-        # Match by t (timestamp); if LLM dropped any, re-add from bundle.
-        by_t = {round(m.t, 2): m for m in report.annotated_moments}
+        by_key = {_moment_key(m): m for m in report.annotated_moments}
         merged = []
-        for src in bundle.annotated_moments:
-            key = round(src.t, 2)
-            llm_m = by_t.get(key)
-            if llm_m:
-                # Trust src for the rule fields, keep LLM coach_comment.
+        for idx, src in enumerate(bundle.annotated_moments):
+            llm_m = by_key.get(_moment_key(src))
+            if llm_m is None and idx < len(report.annotated_moments):
+                candidate = report.annotated_moments[idx]
+                if _same_rule_moment(src, candidate):
+                    llm_m = candidate
+            if llm_m and llm_m.coach_comment:
                 src.coach_comment = llm_m.coach_comment
-                merged.append(src)
-            else:
-                merged.append(src)
+            if not src.coach_comment:
+                src.coach_comment = _fallback_moment_comment(src)
+            merged.append(src)
         report.annotated_moments = merged
 
     # Subtitle segments — built from the bundle's STT segments so the review UI
@@ -64,14 +229,17 @@ def _backfill_from_bundle(report: ComprehensiveReport, bundle: SessionBundle) ->
         )
         for seg in bundle.stt_segments
     ]
+    report.transcript_checks = _build_transcript_checks(bundle)
     return report
 
 
 def _user_payload(bundle: SessionBundle) -> str:
     inner = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False, indent=2)
+    focus = ", ".join(bundle.focus_goals) if bundle.focus_goals else "없음"
     return (
         f"세션 ID: {bundle.session_id}\n"
         f"길이: {bundle.duration_s:.1f}s\n\n"
+        f"사용자 선택 포커스: {focus}\n\n"
         f"## SessionBundle (구조화 신호)\n```json\n{inner}\n```"
     )
 
@@ -151,6 +319,7 @@ def generate_with_gemini(bundle: SessionBundle) -> ComprehensiveReport:
             system_instruction=_compose_system_prompt(bundle.scenario),
             response_mime_type="application/json",
             response_schema=ComprehensiveReport,
+            temperature=0.0,
         ),
     )
     parsed: Optional[ComprehensiveReport] = response.parsed
@@ -198,6 +367,7 @@ def generate_with_claude(bundle: SessionBundle) -> ComprehensiveReport:
         ],
         messages=[{"role": "user", "content": _user_payload(bundle)}],
         output_format=ComprehensiveReport,
+        temperature=0.0,
     )
     parsed: Optional[ComprehensiveReport] = response.parsed_output
     if parsed is None:
@@ -290,7 +460,7 @@ def generate_with_jeonbuk(bundle: SessionBundle) -> ComprehensiveReport:
                 "content": f"{_user_payload(bundle)}\n\n{JEONBUK_JSON_CONTRACT}",
             },
         ],
-        temperature=0.2,
+        temperature=0.0,
     )
     content = response.choices[0].message.content or ""
     try:

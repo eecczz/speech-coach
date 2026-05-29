@@ -22,8 +22,8 @@ import numpy as np  # type: ignore
 # purpose: words like "그" are common standalone fillers but also legitimate
 # parts of phrases ("그리고"), so we match only the bare standalone form.
 KOREAN_FILLERS = {
-    "음", "어", "그", "그니까", "그러니까", "이제",
-    "뭐", "약간", "막", "근데",
+    "음", "어", "아", "에", "저", "저기", "그", "그게",
+    "그니까", "그러니까", "이제", "뭐", "약간", "막", "근데",
     "음...", "어...", "에...",
 }
 
@@ -32,6 +32,8 @@ F0_MIN = 80.0
 F0_MAX = 400.0
 TARGET_SR = 16000  # match faster-whisper input
 END_SLICE_S = 0.5  # last 0.5s of a segment for end_energy_drop
+MIN_WPM_DURATION_S = 2.0  # avoids 1-word/0.4s segments becoming fake 150 WPM spikes
+LONG_SILENCE_S = 2.0
 
 
 def _hz_to_semitones(f0_hz: np.ndarray, ref_hz: float) -> np.ndarray:
@@ -44,7 +46,7 @@ def _hz_to_semitones(f0_hz: np.ndarray, ref_hz: float) -> np.ndarray:
 
 
 def _norm_word(w: str) -> str:
-    return w.strip().strip(".,!?…\"'()[]{}").strip()
+    return w.strip().strip(".,!?…~\"'`“”‘’()[]{}<>").strip()
 
 
 def _filler_match(words: List[Dict]) -> tuple[int, List[str]]:
@@ -76,6 +78,25 @@ def analyze_prosody(wav_path: str, segments: List[Dict]) -> List[Dict]:
 
     frames: List[Dict] = []
     n_segs = len(segments)
+    if n_segs == 0:
+        return [{
+            "t_start": 0.0,
+            "t_end": duration,
+            "wpm": 0.0,
+            "word_count": 0,
+            "filler_count": 0,
+            "filler_terms": [],
+            "pause_seconds": duration if duration >= LONG_SILENCE_S else 0.0,
+            "silence_seconds": duration if duration >= LONG_SILENCE_S else 0.0,
+            "f0_variance": None,
+            "rms_mean": float(np.mean(rms)) if rms.size else None,
+            "pitch_sd_semitones": None,
+            "pitch_range_semitones": None,
+            "intensity_cv": None,
+            "end_energy_drop": None,
+            "articulation_proxy": None,
+        }]
+
     for i, seg in enumerate(segments):
         t_start = float(seg.get("start", 0.0))
         t_end = float(seg.get("end", t_start))
@@ -113,7 +134,8 @@ def analyze_prosody(wav_path: str, segments: List[Dict]) -> List[Dict]:
 
         # WPM from word count over segment duration (in minutes).
         word_count = len(words)
-        wpm = (word_count / seg_dur) * 60.0
+        rate_dur = max(seg_dur, MIN_WPM_DURATION_S)
+        wpm = (word_count / rate_dur) * 60.0
 
         # Filler match.
         filler_count, filler_terms = _filler_match(words)
@@ -127,17 +149,17 @@ def analyze_prosody(wav_path: str, segments: List[Dict]) -> List[Dict]:
         if i + 1 < n_segs:
             pause_seconds = max(0.0, float(segments[i + 1].get("start", t_end)) - t_end)
         else:
-            pause_seconds = 0.0
+            pause_seconds = max(0.0, duration - t_end)
 
-        # Silence_seconds: for non-final segments, the trailing pause IS a silence
-        # ending at this segment's end. For the final segment, leave 0 — we don't
-        # know the actual trailing silence without the recording end timestamp.
-        silence_seconds = pause_seconds if i + 1 < n_segs else 0.0
+        # Silence_seconds: report only meaningful gaps. The final segment can also
+        # carry trailing silence because this server has the full WAV duration.
+        silence_seconds = pause_seconds if pause_seconds >= LONG_SILENCE_S else 0.0
 
         frames.append({
             "t_start": t_start,
             "t_end": t_end,
             "wpm": wpm,
+            "word_count": word_count,
             "filler_count": filler_count,
             "filler_terms": filler_terms,
             "pause_seconds": pause_seconds,

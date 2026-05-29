@@ -44,6 +44,15 @@ const SCENARIO_MAP: Record<string, string> = {
   free: 'presentation',
 };
 
+function resolveFocusGoals(): string[] {
+  const params = new URLSearchParams(location.search);
+  const goal = params.get('goal') || '';
+  return goal
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const VIRTUAL_HINTS = ['virtual', 'mirametrix', 'obs', 'snap', 'nvidia broadcast', 'xsplit', 'manycam'];
 
 function isLikelyVirtual(label: string): boolean {
@@ -185,8 +194,9 @@ async function bootstrap() {
     setRecordBadge('녹화 중', 'recording');
     setStatus('세션 시작 중…');
     sessionId = `sess_${Date.now()}`;
+    const focusGoals = resolveFocusGoals();
     resetSignalState();
-    await aggregator.start(sessionId, scenario);
+    await aggregator.start(sessionId, scenario, focusGoals);
     recorder.start(stream);
     silenceDetector = new SilenceDetector(stream);
     silenceDetector.start();

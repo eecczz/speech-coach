@@ -19,6 +19,7 @@ class Session:
     # Scenario id picked at /session/start — propagates to SessionBundle.scenario so
     # the coach loads the matching rubric (presentation/interview/vocal/...).
     scenario: str = "presentation"
+    focus_goals: List[str] = field(default_factory=list)
     vision_frames: List[VisionFrame] = field(default_factory=list)
     stt_segments: List[SttSegment] = field(default_factory=list)
     prosody_frames: List[ProsodyFrame] = field(default_factory=list)
@@ -38,9 +39,14 @@ class Session:
 _active: Optional[Session] = None
 
 
-def start_session(session_id: str, scenario: str = "presentation") -> Session:
+def start_session(session_id: str, scenario: str = "presentation", focus_goals: Optional[List[str]] = None) -> Session:
     global _active
-    _active = Session(session_id=session_id, started_at=time.time(), scenario=scenario)
+    _active = Session(
+        session_id=session_id,
+        started_at=time.time(),
+        scenario=scenario,
+        focus_goals=list(focus_goals or []),
+    )
     return _active
 
 

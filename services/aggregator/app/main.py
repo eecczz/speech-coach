@@ -56,9 +56,29 @@ _hud_broadcasts: list[WebSocket] = []  # clients listening for live HUD pushback
 async def session_start(payload: dict):
     sid = payload.get("session_id") or "default"
     scenario = payload.get("scenario") or "presentation"
-    start_session(sid, scenario)
+    focus_goals = _normalize_focus_goals(payload.get("focus_goals"))
+    start_session(sid, scenario, focus_goals)
     windowing.flush()
-    return {"session_id": sid, "scenario": scenario, "ok": True}
+    return {"session_id": sid, "scenario": scenario, "focus_goals": focus_goals, "ok": True}
+
+
+def _normalize_focus_goals(value) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, str):
+        raw = value.split(",")
+    elif isinstance(value, list):
+        raw = value
+    else:
+        return []
+    out: list[str] = []
+    seen = set()
+    for item in raw:
+        label = str(item).strip()
+        if label and label not in seen:
+            out.append(label)
+            seen.add(label)
+    return out[:8]
 
 
 @app.post("/session/end")

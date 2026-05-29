@@ -114,6 +114,19 @@ class SubtitleSegment(BaseModel):
     words: List[SubtitleWord] = Field(default_factory=list)
 
 
+class TranscriptCheck(BaseModel):
+    """A transcript phrase that looks worth reviewing against the original audio.
+
+    This is not a pronunciation verdict. It flags likely STT/domain-term mismatch
+    candidates so the user can compare the transcript with what they actually said.
+    """
+    phrase: str
+    suggestion: Optional[str] = None
+    reason: str
+    t_start: Optional[float] = None
+    t_end: Optional[float] = None
+
+
 class ComprehensiveReport(BaseModel):
     session_id: str
     rubric: Rubric
@@ -132,3 +145,5 @@ class ComprehensiveReport(BaseModel):
     # STT segments (with word timestamps) for review-time subtitle rendering +
     # word-level highlighting of verbal mistake moments. Not consumed by the LLM.
     subtitle_segments: List[SubtitleSegment] = Field(default_factory=list)
+    # STT/domain-term mismatch candidates for the report UI.
+    transcript_checks: List[TranscriptCheck] = Field(default_factory=list)

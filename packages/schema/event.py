@@ -18,6 +18,7 @@ from .signal import SttSegment
 
 class EventKind(str, Enum):
     WPM_SPIKE = "wpm_spike"
+    WPM_SLOW = "wpm_slow"
     LONG_PAUSE = "long_pause"
     FILLER_BURST = "filler_burst"
     GAZE_LAPSE = "gaze_lapse"
@@ -73,6 +74,10 @@ class SessionBundle(BaseModel):
     # selects the matching YAML rubric from services/coach/rubrics/ and composes the
     # LLM prompt around it. Defaults to "presentation" for backward compatibility.
     scenario: str = "presentation"
+    # User-selected coaching focus labels from the setup page, e.g. ["말 속도", "시선 처리"].
+    # These don't override the scenario rubric; they tell the coach which measured
+    # evidence should be prioritized when multiple issues have similar impact.
+    focus_goals: List[str] = Field(default_factory=list)
     duration_s: float = Field(ge=0)
     full_transcript: str
     words: List[WordSpan]
