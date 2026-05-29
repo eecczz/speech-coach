@@ -10,7 +10,7 @@ import { createLandmarkers, detect } from './mediapipe/landmarkers';
 import { AvatarRecorder } from './recorder/canvas-record';
 import { computeVisionFrame, resetSignalState } from './signals/compute';
 import { SilenceDetector } from './signals/silence';
-import { createAggregatorClient, createHudClient, type LiveHudResponse } from './ws/client';
+import { createAggregatorClient } from './ws/client';
 import { savePendingMedia, setPendingAnalysis } from './session-store';
 
 const status = document.getElementById('status') as HTMLDivElement;
@@ -32,12 +32,6 @@ const goals = (params.get('goal') || '말 속도')
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
-
-const hudCards = {
-  wpm: document.querySelector<HTMLElement>('[data-hud-card="wpm"]'),
-  filler: document.querySelector<HTMLElement>('[data-hud-card="filler"]'),
-  silence: document.querySelector<HTMLElement>('[data-hud-card="silence"]'),
-};
 
 const SCENARIO_MAP: Record<string, string> = {
   presentation: 'presentation',
@@ -136,57 +130,6 @@ function setRecordBadge(label: string, state: 'idle' | 'recording' | 'done' = 'i
   recordBadge.append(label);
 }
 
-function setHudCard(
-  key: keyof typeof hudCards,
-  value: string,
-  meterPct: number,
-  tone: 'idle' | 'ok' | 'warn' | 'critical' = 'idle',
-) {
-  const card = hudCards[key];
-  if (!card) return;
-  const valueEl = card.querySelector<HTMLElement>('[data-hud-value]');
-  const meterEl = card.querySelector<HTMLElement>('.meter i');
-  card.classList.remove('is-muted', 'is-ok', 'is-warn', 'is-critical');
-  card.classList.add(
-    tone === 'ok' ? 'is-ok' : tone === 'warn' ? 'is-warn' : tone === 'critical' ? 'is-critical' : 'is-muted',
-  );
-  if (valueEl) valueEl.textContent = value;
-  if (meterEl) meterEl.style.width = `${Math.max(0, Math.min(100, meterPct))}%`;
-}
-
-function resetHudCards() {
-  setHudCard('wpm', '—', 0, 'idle');
-  setHudCard('filler', '—', 0, 'idle');
-  setHudCard('silence', '—', 0, 'idle');
-}
-
-function parseHudNumber(text: string): number | null {
-  const match = text.match(/(\d+(?:\.\d+)?)/);
-  return match ? Number(match[1]) : null;
-}
-
-function syncHudFromResponse(payload: LiveHudResponse, recording: boolean) {
-  if (!recording) return;
-  const byKind = new Map(payload.signals.map((signal) => [signal.kind, signal]));
-  const wpmSignal = byKind.get('wpm_very_high') ?? byKind.get('wpm_high');
-  if (wpmSignal) {
-    const wpm = parseHudNumber(wpmSignal.text) ?? 0;
-    const tone = wpmSignal.level === 'critical' ? 'critical' : 'warn';
-    setHudCard('wpm', `${Math.round(wpm)} WPM`, Math.min(100, (wpm / 240) * 100), tone);
-  } else {
-    setHudCard('wpm', '안정적', 42, 'ok');
-  }
-
-  const fillerSignal = byKind.get('filler_burst');
-  if (fillerSignal) {
-    const count = parseHudNumber(fillerSignal.text) ?? 0;
-    const tone = fillerSignal.level === 'critical' ? 'critical' : 'warn';
-    setHudCard('filler', `${Math.round(count)}회`, Math.min(100, count * 20), tone);
-  } else {
-    setHudCard('filler', '낮음', 18, 'ok');
-  }
-}
-
 async function bootstrap() {
   setStatus('카메라/마이크 권한 요청 중…');
   let stream = await acquireStream();
@@ -233,11 +176,9 @@ async function bootstrap() {
   btnStart.disabled = false;
   setTimer(0);
   setRecordBadge('대기 중');
-  resetHudCards();
 
   const recorder = new AvatarRecorder();
   const aggregator = createAggregatorClient();
-  const hudClient = createHudClient();
   let recording = false;
   let recordingStartTSec = 0;
   let lastSignalSendT = 0;
@@ -245,10 +186,6 @@ async function bootstrap() {
   let silenceDetector: SilenceDetector | null = null;
   let sessionId = '';
   const scenario = SCENARIO_MAP[typeName] || 'presentation';
-
-  await hudClient.connect((payload) => {
-    syncHudFromResponse(payload, recording);
-  });
 
   btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
@@ -268,7 +205,6 @@ async function bootstrap() {
     lastSignalSendT = 0;
     lastProsodySendT = 0;
     btnStop.disabled = false;
-    resetHudCards();
     setStatus(`녹화 중… (세션 ${sessionId})`);
   });
 
@@ -422,13 +358,6 @@ async function bootstrap() {
               silence_seconds: silenceSeconds,
               rms_mean: rmsMean,
             });
-            const tone = silenceSeconds >= 4 ? 'warn' : silenceSeconds >= 2 ? 'ok' : 'idle';
-            setHudCard(
-              'silence',
-              silenceSeconds > 0.1 ? `${silenceSeconds.toFixed(1)}초` : '짧음',
-              Math.min(100, (silenceSeconds / 4) * 100),
-              tone,
-            );
             silenceDetector.resetWindow();
             lastProsodySendT = sessionT;
           }
@@ -460,7 +389,6 @@ async function bootstrap() {
   });
 
   window.addEventListener('pagehide', () => {
-    hudClient.close();
     aggregator.close();
   });
 }
