@@ -11,7 +11,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/brand-Cxc74oTK.css">
+    <script type="module" crossorigin src="/assets/dashboard-CeWZYkYG.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/session-store-DZAi9Jqg.js">
+    <link rel="modulepreload" crossorigin href="/assets/report-utils-F1iBMEoG.js">
+    <link rel="stylesheet" crossorigin href="/assets/brand-CZ3o_Puc.css">
   </head>
   <body>
     <main class="dashboard-shell">
@@ -32,8 +35,8 @@
       <section class="dashboard-main">
         <div class="dashboard-header">
           <div>
-            <h1>이번 달 말하기 습관이 좋아지고 있어요.</h1>
-            <p>최근 세션의 변화와 다음 목표를 한눈에 확인해요.</p>
+            <h1>성장 트래킹이 준비되면 이곳에서 확인할 수 있어요.</h1>
+            <p>연습이 쌓이면 변화와 흐름이 자연스럽게 정리됩니다.</p>
           </div>
           <div class="tabs">
             <button class="tab is-active">30일</button>
@@ -43,18 +46,18 @@
         </div>
 
         <section class="metric-row">
-          <div class="score-box"><div class="label">Average</div><div class="value">82</div><p>+6</p></div>
-          <div class="score-box"><div class="label">Sessions</div><div class="value">14</div><p>+3</p></div>
-          <div class="score-box"><div class="label">Practice time</div><div class="value">3.8h</div><p>+42m</p></div>
-          <div class="score-box"><div class="label">Streak</div><div class="value">5</div><p>days</p></div>
+          <div class="score-box"><div class="label">Average</div><div class="value" data-metric="average">—</div><p data-metric-note="average">데이터 준비 중</p></div>
+          <div class="score-box"><div class="label">Sessions</div><div class="value" data-metric="sessions">—</div><p data-metric-note="sessions">데이터 준비 중</p></div>
+          <div class="score-box"><div class="label">Practice time</div><div class="value" data-metric="time">—</div><p data-metric-note="time">데이터 준비 중</p></div>
+          <div class="score-box"><div class="label">Streak</div><div class="value" data-metric="streak">—</div><p data-metric-note="streak">데이터 준비 중</p></div>
         </section>
 
         <section class="card goal-banner">
           <div>
-            <h2>면접 답변 안정감</h2>
-            <p>이전 74 → 현재 82 → 목표 88</p>
+            <h2>이번 목표</h2>
+            <p id="goal-banner-copy">분석 결과가 쌓이면 다음 목표가 표시됩니다.</p>
           </div>
-          <div class="meter"><i style="width: 72%"></i></div>
+          <div class="meter"><i id="goal-banner-meter" style="width: 0%"></i></div>
         </section>
 
         <section class="card chart-card">
@@ -66,42 +69,24 @@
         </section>
 
         <section class="habit-grid">
-          <div class="card habit-card"><h2>필러 표현</h2><div class="bar-list"><i style="height: 60%"></i><i style="height: 42%"></i><i style="height: 28%"></i></div><p>-32%</p></div>
-          <div class="card habit-card"><h2>말 속도</h2><div class="bar-list"><i style="height: 38%"></i><i style="height: 52%"></i><i style="height: 58%"></i></div><p>+14%</p></div>
-          <div class="card habit-card"><h2>시선 안정</h2><div class="bar-list"><i style="height: 34%"></i><i style="height: 48%"></i><i style="height: 72%"></i></div><p>+21%</p></div>
+          <div class="card habit-card" data-habit="filler"><h2>필러 표현</h2><div class="bar-list"><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i></div><p>데이터 준비 중</p></div>
+          <div class="card habit-card" data-habit="delivery"><h2>말 속도</h2><div class="bar-list"><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i></div><p>데이터 준비 중</p></div>
+          <div class="card habit-card" data-habit="gaze"><h2>시선 안정</h2><div class="bar-list"><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i></div><p>데이터 준비 중</p></div>
         </section>
       </section>
 
       <aside class="history-side">
         <section class="card">
           <h2>상황별 연습</h2>
-          <div class="axis-row"><span class="axis-label">면접</span><span class="axis-bar"><span class="axis-fill" style="width: 62%"></span></span><span class="axis-score">8</span></div>
-          <div class="axis-row"><span class="axis-label">발표</span><span class="axis-bar"><span class="axis-fill" style="width: 38%"></span></span><span class="axis-score">5</span></div>
-          <div class="axis-row"><span class="axis-label">전화</span><span class="axis-bar"><span class="axis-fill" style="width: 18%"></span></span><span class="axis-score">2</span></div>
+          <div id="scenario-breakdown">
+            <div class="axis-row"><span class="axis-label">연습 기록 준비 중</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+          </div>
         </section>
         <section class="card recent-list">
           <h2>최근 세션</h2>
-          <a href="report.html"><span>05.28</span><strong>최종 면접 준비</strong><em>82</em></a>
-          <a href="report.html"><span>05.26</span><strong>팀 발표 리허설</strong><em>78</em></a>
-          <a href="report.html"><span>05.21</span><strong>전화 응대 연습</strong><em>74</em></a>
+          <div id="recent-sessions"><p>표시할 연습 기록이 아직 없습니다.</p></div>
         </section>
       </aside>
     </main>
-
-    <script>
-      new Chart(document.getElementById('growth-chart'), {
-        type: 'line',
-        data: {
-          labels: ['1회', '2회', '3회', '4회', '5회', '6회'],
-          datasets: [
-            { label: '전체', data: [70, 73, 76, 78, 80, 82], borderColor: '#2e2c3a', borderWidth: 2, tension: 0.25 },
-            { label: '언어', data: [72, 74, 77, 80, 82, 84], borderColor: '#6b6880', borderDash: [4, 4], borderWidth: 1.5, tension: 0.25 },
-            { label: '준언어', data: [66, 69, 72, 73, 76, 78], borderColor: '#9896a8', borderDash: [4, 4], borderWidth: 1.5, tension: 0.25 },
-            { label: '비언어', data: [68, 70, 74, 76, 79, 81], borderColor: '#C8D0E0', borderDash: [4, 4], borderWidth: 1.5, tension: 0.25 },
-          ],
-        },
-        options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } },
-      });
-    </script>
   </body>
 </html>

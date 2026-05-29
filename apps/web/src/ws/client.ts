@@ -23,6 +23,18 @@ export interface AudioAnalysisResult {
   elapsed_s?: number;
 }
 
+export interface LiveHudSignal {
+  level: 'info' | 'warn' | 'critical';
+  text: string;
+  kind: string;
+}
+
+export interface LiveHudResponse {
+  window_t_start: number;
+  window_t_end: number;
+  signals: LiveHudSignal[];
+}
+
 export interface AggregatorClient {
   start(sessionId: string, scenario?: string): Promise<void>;
   sendVision(frame: VisionFrame): void;
@@ -30,6 +42,35 @@ export interface AggregatorClient {
   /** Optional audio analysis result (from /analyze) gets merged into the bundle. */
   end(audioResult?: AudioAnalysisResult | null): Promise<unknown>;
   close(): void;
+}
+
+export interface HudClient {
+  connect(onMessage: (payload: LiveHudResponse) => void): Promise<void>;
+  close(): void;
+}
+
+export async function finalizeSession(
+  sessionId: string,
+  audioResult?: AudioAnalysisResult | null,
+  httpBase = '',
+): Promise<unknown> {
+  const body: Record<string, unknown> = { session_id: sessionId };
+  if (audioResult) {
+    if (audioResult.stt_segments) body.stt_segments = audioResult.stt_segments;
+    if (audioResult.prosody_frames) body.prosody_frames = audioResult.prosody_frames;
+    if (audioResult.full_transcript) body.full_transcript = audioResult.full_transcript;
+  }
+  try {
+    const r = await fetch(`${httpBase}/session/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch (e) {
+    console.warn('[ws] session/end failed', e);
+    return null;
+  }
 }
 
 export function createAggregatorClient(opts: {
@@ -94,30 +135,52 @@ export function createAggregatorClient(opts: {
 
     async end(audioResult?: AudioAnalysisResult | null) {
       if (!sessionId) return null;
-      const body: Record<string, unknown> = { session_id: sessionId };
-      // Merge in audio-pipeline /analyze result so aggregator can replace the
-      // browser-side stub prosody with server-side STT + prosody.
-      if (audioResult) {
-        if (audioResult.stt_segments) body.stt_segments = audioResult.stt_segments;
-        if (audioResult.prosody_frames) body.prosody_frames = audioResult.prosody_frames;
-        if (audioResult.full_transcript) body.full_transcript = audioResult.full_transcript;
-      }
-      // /session/end can take a while when audio is included (whisper+librosa)
-      // but we already analyzed before calling this — body is just JSON ship.
-      try {
-        const r = await fetch(`${httpBase}/session/end`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        return await r.json();
-      } catch (e) {
-        console.warn('[ws] session/end failed', e);
-        return null;
-      }
+      return finalizeSession(sessionId, audioResult, httpBase);
     },
 
     close() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    },
+  };
+}
+
+export function createHudClient(opts: { wsBase?: string } = {}): HudClient {
+  const wsBase = opts.wsBase ?? '';
+  let ws: WebSocket | null = null;
+  let keepalive: number | null = null;
+
+  return {
+    async connect(onMessage) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = wsBase || `${proto}//${location.host}/ws/hud`;
+      ws = new WebSocket(url);
+      await new Promise<void>((resolve) => {
+        if (!ws) return resolve();
+        ws.onopen = () => {
+          keepalive = window.setInterval(() => {
+            if (ws?.readyState === WebSocket.OPEN) ws.send('ping');
+          }, 15000);
+          resolve();
+        };
+        ws.onerror = () => resolve();
+        ws.onmessage = (event) => {
+          try {
+            onMessage(JSON.parse(event.data) as LiveHudResponse);
+          } catch (error) {
+            console.warn('[hud] parse error', error);
+          }
+        };
+      });
+    },
+
+    close() {
+      if (keepalive) {
+        window.clearInterval(keepalive);
+        keepalive = null;
+      }
       if (ws) {
         ws.close();
         ws = null;

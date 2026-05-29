@@ -34,70 +34,14 @@
         </section>
 
         <div class="page-heading">
-          <h1>연습 내용을 차분히 정리하고 있어요.</h1>
-          <p>언어적, 준언어적, 비언어적 신호를 모아 다음 연습 포인트를 고르고 있어요.</p>
+          <h1>분석 흐름을 차분히 정리하고 있어요.</h1>
+          <p>단계가 순서대로 진행되면 곧 코칭 화면으로 이어집니다.</p>
         </div>
 
         <div id="steps" class="loading-stack"></div>
+        <p class="loading-note">잠깐! 분석이 끝날 때까지 창을 열어주세요.</p>
       </section>
     </main>
-
-    <script>
-      const themeToggle = document.querySelector('[data-theme-toggle]');
-      const params = new URLSearchParams(location.search);
-      const project = params.get('project') || '오늘의 말하기 연습';
-      const goal = params.get('goal') || '말 속도';
-
-      function syncThemeToggle() {
-        const theme = document.documentElement.dataset.theme || 'light';
-        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
-        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
-      }
-
-      themeToggle.addEventListener('click', () => {
-        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.theme = nextTheme;
-        localStorage.setItem('speakup-theme', nextTheme);
-        syncThemeToggle();
-      });
-
-      const steps = [
-        '말의 구조를 살펴보는 중',
-        '속도와 목소리 톤을 정리하는 중',
-        '시선과 자세 흐름을 모으는 중',
-      ];
-
-      const stepsEl = document.getElementById('steps');
-      const items = steps.map((message, index) => {
-        const row = document.createElement('div');
-        row.className = 'loading-step';
-        row.innerHTML = `<div class="step-dot"></div><strong>${message}</strong>`;
-        stepsEl.appendChild(row);
-        setTimeout(() => {
-          row.classList.add('is-visible');
-          if (index === 0) row.classList.add('is-current');
-        }, 200 + index * 1500);
-        return row;
-      });
-
-      setTimeout(() => {
-        items[0].classList.remove('is-current');
-        items[1].classList.add('is-current');
-      }, 1900);
-
-      setTimeout(() => {
-        items[1].classList.remove('is-current');
-        items[2].classList.add('is-current');
-      }, 3400);
-
-      setTimeout(() => {
-        const next = new URL('report.html', location.href);
-        next.searchParams.set('project', project);
-        next.searchParams.set('goal', goal);
-        location.href = next.toString();
-      }, 6200);
-
-      syncThemeToggle();
-    </script>
+    <script type="module" src="/src/loading.ts"></script>
   </body>
 </html>

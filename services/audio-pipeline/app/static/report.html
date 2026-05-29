@@ -11,7 +11,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/brand-Cxc74oTK.css">
+    <script type="module" crossorigin src="/assets/report-F_KRxC0V.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/session-store-DZAi9Jqg.js">
+    <link rel="modulepreload" crossorigin href="/assets/report-utils-F1iBMEoG.js">
+    <link rel="stylesheet" crossorigin href="/assets/brand-CZ3o_Puc.css">
   </head>
   <body>
     <main class="container app-shell">
@@ -43,49 +46,49 @@
             <div class="score-grid report-scores">
               <div class="score-box">
                 <div class="label">이번 점수</div>
-                <div class="value" id="current-score">82</div>
+                <div class="value" id="current-score">—</div>
               </div>
               <div class="score-box">
                 <div class="label">목표</div>
-                <div class="value" id="target-score">88</div>
+                <div class="value" id="target-score">—</div>
               </div>
               <div class="score-box">
                 <div class="label">Delta</div>
-                <div class="value positive">+6</div>
+                <div class="value" id="delta-score">—</div>
               </div>
             </div>
           </div>
 
           <div class="ai-feedback-box" id="ai-summary">
-            전체 구조는 안정적이에요. 다만 중반 이후 말 속도가 빨라지는 구간이 있어, 핵심 문장 앞에 짧은 쉼을 넣어보세요.
+            분석 결과가 준비되면 이곳에 요약이 표시됩니다.
           </div>
 
           <section class="card chart-card">
             <div class="panel-title">
               <h2>발화 점수 타임라인</h2>
-              <span>꼭지점을 클릭하면 해당 순간의 영상을 볼 수 있어요.</span>
+              <span>분석 데이터가 준비되면 타임라인이 표시됩니다.</span>
             </div>
             <canvas id="score-chart" height="132"></canvas>
           </section>
 
           <section class="axis-cards">
-            <div class="score-box">
-              <div class="label">Verbal</div>
-              <div class="value">84</div>
-              <div class="meter"><i style="width: 84%"></i></div>
-              <p>핵심 메시지 연결이 안정적이에요.</p>
+            <div class="score-box" data-axis-card="verbal">
+              <div class="label">언어 표현</div>
+              <div class="value" data-axis-value>—</div>
+              <div class="meter"><i style="width: 0%"></i></div>
+              <p data-axis-note>분석 결과가 준비되면 표시됩니다.</p>
             </div>
-            <div class="score-box">
-              <div class="label">Prosody</div>
-              <div class="value">78</div>
-              <div class="meter"><i style="width: 78%"></i></div>
-              <p>중반 속도만 조금 낮춰보세요.</p>
+            <div class="score-box" data-axis-card="prosody">
+              <div class="label">말의 리듬</div>
+              <div class="value" data-axis-value>—</div>
+              <div class="meter"><i style="width: 0%"></i></div>
+              <p data-axis-note>분석 결과가 준비되면 표시됩니다.</p>
             </div>
-            <div class="score-box">
-              <div class="label">Non-verbal</div>
-              <div class="value">81</div>
-              <div class="meter"><i style="width: 81%"></i></div>
-              <p>시선 흐름이 점점 안정되고 있어요.</p>
+            <div class="score-box" data-axis-card="nonverbal">
+              <div class="label">비언어 표현</div>
+              <div class="value" data-axis-value>—</div>
+              <div class="meter"><i style="width: 0%"></i></div>
+              <p data-axis-note>분석 결과가 준비되면 표시됩니다.</p>
             </div>
           </section>
         </section>
@@ -93,22 +96,14 @@
         <aside class="side-panel">
           <section class="card moments-panel">
             <h2>주의 구간</h2>
-            <button type="button" class="moment-card" data-open-modal>
-              <span>00:42</span><strong>속도가 빨라졌어요</strong><em>주의</em>
-            </button>
-            <button type="button" class="moment-card is-good" data-open-modal>
-              <span>01:18</span><strong>좋은 쉼이 있었어요</strong><em>좋음</em>
-            </button>
-            <button type="button" class="moment-card" data-open-modal>
-              <span>02:05</span><strong>필러 표현이 반복됐어요</strong><em>흐름</em>
-            </button>
+            <div id="moments-list">
+              <p>표시할 분석 구간이 아직 없습니다.</p>
+            </div>
           </section>
           <section class="card next-goals">
             <h2>다음 세션 목표</h2>
-            <ol>
-              <li>핵심 문장 앞에 1초 쉬기</li>
-              <li>필러 표현을 두 번 이하로 줄이기</li>
-              <li>마무리 문장을 더 천천히 말하기</li>
+            <ol id="next-goals-list">
+              <li>분석 결과가 준비되면 다음 목표가 표시됩니다.</li>
             </ol>
             <div class="actions vertical">
               <a class="btn btn-primary" id="retry-link" href="practice.html">다시 연습하기</a>
@@ -120,76 +115,14 @@
 
       <dialog class="video-modal" id="video-modal">
         <button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button>
-        <div class="modal-video">00:42</div>
+        <div class="modal-video" id="modal-video">No clip</div>
         <div class="modal-controls">
           <button type="button" class="btn btn-ghost">10초 전</button>
           <button type="button" class="btn btn-primary">재생</button>
           <button type="button" class="btn btn-ghost">10초 후</button>
         </div>
-        <div class="ai-feedback-box">이 구간은 말 속도가 조금 빨라졌어요. 다음에는 핵심 문장 앞에 짧은 쉼을 넣어보세요.</div>
+        <div class="ai-feedback-box" id="modal-feedback">표시할 세부 분석 결과가 아직 없습니다.</div>
       </dialog>
     </main>
-
-    <script>
-      const themeToggle = document.querySelector('[data-theme-toggle]');
-      const params = new URLSearchParams(location.search);
-      const project = params.get('project') || '오늘의 말하기 연습';
-      const goal = params.get('goal') || '말 속도';
-      const goals = goal.split(',').map((item) => item.trim()).filter(Boolean);
-      const retryLink = document.getElementById('retry-link');
-
-      function syncThemeToggle() {
-        const theme = document.documentElement.dataset.theme || 'light';
-        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
-        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
-      }
-
-      themeToggle.addEventListener('click', () => {
-        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.theme = nextTheme;
-        localStorage.setItem('speakup-theme', nextTheme);
-        syncThemeToggle();
-      });
-
-      document.getElementById('report-title').textContent = project;
-      document.getElementById('report-focus-line').textContent =
-        `이번 연습에서는 ${goals.join(', ')}를 중심으로 돌아봤어요.`;
-      retryLink.href = `practice.html?project=${encodeURIComponent(project)}&goal=${encodeURIComponent(goals.join(', '))}`;
-
-      const chart = document.getElementById('score-chart');
-      new Chart(chart, {
-        type: 'line',
-        data: {
-          labels: ['00:00', '00:30', '01:00', '01:30', '02:00', '02:30'],
-          datasets: [{
-            data: [76, 82, 68, 86, 74, 88],
-            borderColor: '#2e2c3a',
-            backgroundColor: '#2e2c3a',
-            pointBackgroundColor: ['#2e2c3a', '#2e2c3a', '#EF4444', '#059669', '#EF4444', '#2e2c3a'],
-            pointRadius: [4, 4, 7, 5, 7, 4],
-            borderWidth: 2,
-            tension: 0.25,
-          }],
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { min: 0, max: 100, grid: { color: '#DDE3EE' } },
-            x: { grid: { display: false } },
-          },
-          onClick: () => document.getElementById('video-modal').showModal(),
-        },
-      });
-
-      document.querySelectorAll('[data-open-modal]').forEach((button) => {
-        button.addEventListener('click', () => document.getElementById('video-modal').showModal());
-      });
-      document.querySelector('[data-close-modal]').addEventListener('click', () => {
-        document.getElementById('video-modal').close();
-      });
-
-      syncThemeToggle();
-    </script>
   </body>
 </html>

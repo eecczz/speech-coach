@@ -31,14 +31,15 @@ export interface UploadAnalyzeContext {
   landmarkers: Landmarkers;
   aggregator: AggregatorClient;
   setStatus: (msg: string) => void;
-  reviewSection: HTMLElement;
-  reviewVideo: HTMLVideoElement; // visible <video> renderReview hangs its overlay onto
+  reviewSection?: HTMLElement;
+  reviewVideo?: HTMLVideoElement; // visible <video> renderReview hangs its overlay onto
+  onPhaseChange?: (phase: 'video' | 'audio' | 'content' | 'done') => void;
 }
 
 export async function analyzeUploadedVideo(
   file: File,
   ctx: UploadAnalyzeContext,
-): Promise<void> {
+): Promise<ComprehensiveReport | null> {
   const url = URL.createObjectURL(file);
 
   // Hidden video element used for frame sampling. Separate from the visible
@@ -59,9 +60,12 @@ export async function analyzeUploadedVideo(
   document.body.appendChild(probe);
 
   // Mirror src onto the visible review video so renderReview can scrub it.
-  ctx.reviewVideo.src = url;
+  if (ctx.reviewVideo) {
+    ctx.reviewVideo.src = url;
+  }
 
   try {
+    ctx.onPhaseChange?.('video');
     ctx.setStatus('영상 로딩 중…');
     await waitFor(probe, META_TIMEOUT_MS);
     const duration = isFinite(probe.duration) && probe.duration > 0 ? probe.duration : 0;
@@ -108,6 +112,7 @@ export async function analyzeUploadedVideo(
     }
 
     // ── Audio: ship the original file to /analyze (STT + prosody) ──
+    ctx.onPhaseChange?.('audio');
     ctx.setStatus('음성 분석 중… (Whisper + 운율, 최대 ~1분)');
     let audioResult: AudioAnalysisResult | null = null;
     try {
@@ -118,6 +123,7 @@ export async function analyzeUploadedVideo(
     }
 
     // ── Bundle + LLM ──
+    ctx.onPhaseChange?.('content');
     ctx.setStatus('평가 생성 중…');
     const result = await ctx.aggregator.end(audioResult);
     ctx.aggregator.close();
@@ -125,15 +131,20 @@ export async function analyzeUploadedVideo(
     if (result && (result as { report?: ComprehensiveReport }).report) {
       const report = (result as { report: ComprehensiveReport }).report;
       console.log('[upload] coach result', result);
-      ctx.reviewSection.hidden = false;
-      renderReview(report, ctx.reviewVideo);
+      if (ctx.reviewSection && ctx.reviewVideo) {
+        ctx.reviewSection.hidden = false;
+        renderReview(report, ctx.reviewVideo);
+      }
       ctx.setStatus(
         `평가 완료 — 종합 ${report.accuracy_overall?.toFixed(1) ?? '?'}점, 순간 ${report.annotated_moments?.length ?? 0}개`,
       );
-      ctx.reviewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      ctx.reviewSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      ctx.onPhaseChange?.('done');
+      return report;
     } else {
       ctx.setStatus('평가 실패 — 콘솔 확인');
       console.warn('[upload] coach result missing or malformed', result);
+      return null;
     }
   } finally {
     // Don't revoke `url` — reviewVideo is still using it. The browser will GC

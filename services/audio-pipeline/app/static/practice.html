@@ -10,8 +10,10 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
-    <script type="module" crossorigin src="/assets/practice-CPs9HC4s.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/brand-Cxc74oTK.css">
+    <script type="module" crossorigin src="/assets/practice-BFitySsC.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/session-store-DZAi9Jqg.js">
+    <link rel="modulepreload" crossorigin href="/assets/client-ijWoWH-U.js">
+    <link rel="stylesheet" crossorigin href="/assets/brand-CZ3o_Puc.css">
   </head>
   <body>
     <main id="practice-root" class="app-shell">
@@ -39,7 +41,17 @@
             <button type="button" class="tab" data-mode="upload">영상 업로드</button>
           </div>
 
-          <section class="stage practice-video">
+          <label class="upload-option" for="avatar-review-toggle">
+            <span class="upload-option-check">
+              <input id="avatar-review-toggle" type="checkbox" />
+            </span>
+            <span class="upload-option-copy">
+              <strong>아바타 모드 켜기</strong>
+              <span>내 모습 대신 아바타로 다시 볼 수 있어요.</span>
+            </span>
+          </label>
+
+          <section class="stage practice-video" id="live-panel">
             <video id="cam" autoplay playsinline muted></video>
             <canvas id="avatar" width="640" height="720"></canvas>
             <div class="record-badge"><span></span>대기 중</div>
@@ -49,24 +61,24 @@
           </section>
 
           <section class="hud-grid" aria-label="실시간 지표">
-            <div class="hud-card is-muted">
+            <div class="hud-card is-muted" data-hud-card="wpm">
               <span>말 속도</span>
-              <strong>—</strong>
+              <strong data-hud-value>—</strong>
               <div class="meter"><i style="width: 0%"></i></div>
             </div>
-            <div class="hud-card is-muted">
+            <div class="hud-card is-muted" data-hud-card="filler">
               <span>필러 표현</span>
-              <strong>—</strong>
+              <strong data-hud-value>—</strong>
               <div class="meter"><i style="width: 0%"></i></div>
             </div>
-            <div class="hud-card is-muted">
+            <div class="hud-card is-muted" data-hud-card="silence">
               <span>침묵 구간</span>
-              <strong>—</strong>
+              <strong data-hud-value>—</strong>
               <div class="meter"><i style="width: 0%"></i></div>
             </div>
           </section>
 
-          <section class="upload-mode" id="upload-panel">
+          <section class="upload-mode" id="upload-panel" hidden style="display:none;">
             <div class="upload-box" id="dropzone">
               <strong>연습 영상 가져오기</strong>
               <p>MP4 · WebM · MOV 파일을 끌어오거나 선택해주세요.</p>
@@ -81,37 +93,28 @@
                 <strong id="file-name">선택된 파일이 없습니다</strong>
                 <span>업로드한 영상은 아래에서 미리 볼 수 있어요.</span>
               </div>
-              <span id="file-size">—</span>
+              <div class="file-row-actions">
+                <span id="file-size">—</span>
+                <button type="button" class="file-clear" id="file-clear" hidden aria-label="선택한 영상 제거">×</button>
+              </div>
             </div>
-
-            <label class="upload-option" for="avatar-review-toggle">
-              <span class="upload-option-check">
-                <input id="avatar-review-toggle" type="checkbox" />
-              </span>
-              <span class="upload-option-copy">
-                <strong>아바타로 복기하기</strong>
-                <span>내 모습 대신 아바타로 다시 볼 수 있어요.</span>
-              </span>
-            </label>
 
             <section id="playback" class="playback" hidden>
               <video id="recorded" controls></video>
             </section>
+
+            <section class="controls upload-controls" id="upload-controls">
+              <button id="btn-analyze" class="btn btn-primary" disabled>AI 코칭 시작</button>
+            </section>
           </section>
 
-          <section class="feedback-stream" aria-label="실시간 피드백">
-            <div class="stream-row"><span>00:12</span><p>시작 속도가 안정적이에요.</p><em>좋음</em></div>
-            <div class="stream-row"><span>00:34</span><p>핵심 문장 앞에 짧은 쉼을 넣어보세요.</p><em>흐름</em></div>
-          </section>
-
-          <section class="controls practice-controls">
+          <section class="controls practice-controls" id="live-controls">
             <label class="device-pick">
               카메라
               <select id="cam-select"></select>
             </label>
             <button id="btn-start" class="btn btn-ghost" disabled>카메라 켜기</button>
             <button id="btn-stop" class="btn btn-ghost" disabled>중지</button>
-            <button id="btn-analyze" class="btn btn-primary" disabled>AI 코칭 시작</button>
           </section>
         </section>
 
@@ -174,6 +177,7 @@
         tab.addEventListener('click', () => {
           document.querySelectorAll('.tab').forEach((el) => el.classList.remove('is-active'));
           tab.classList.add('is-active');
+          syncPracticeMode(tab.dataset.mode);
         });
       });
 
@@ -183,20 +187,44 @@
       const playback = document.getElementById('playback');
       const fileName = document.getElementById('file-name');
       const fileSize = document.getElementById('file-size');
+      const fileClear = document.getElementById('file-clear');
       const dropzone = document.getElementById('dropzone');
       const avatarReviewToggle = document.getElementById('avatar-review-toggle');
+      const uploadPanel = document.getElementById('upload-panel');
+      const livePanel = document.getElementById('live-panel');
+      const liveControls = document.getElementById('live-controls');
+      const uploadControls = document.getElementById('upload-controls');
+
+      function syncPracticeMode(mode) {
+        const isUpload = mode === 'upload';
+        uploadPanel.hidden = !isUpload;
+        uploadPanel.style.display = isUpload ? 'grid' : 'none';
+        uploadControls.hidden = !isUpload;
+        uploadControls.style.display = isUpload ? '' : 'none';
+        livePanel.hidden = isUpload;
+        livePanel.style.display = isUpload ? 'none' : '';
+        liveControls.hidden = isUpload;
+        liveControls.style.display = isUpload ? 'none' : '';
+      }
 
       function updateFileState(file) {
         if (!file) {
           analyze.disabled = true;
           fileName.textContent = '선택된 파일이 없습니다';
           fileSize.textContent = '—';
+          fileClear.hidden = true;
+          dropzone.classList.remove('is-collapsed');
+          playback.hidden = true;
+          recorded.removeAttribute('src');
+          recorded.load();
           return;
         }
 
         analyze.disabled = false;
         fileName.textContent = file.name;
         fileSize.textContent = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+        fileClear.hidden = false;
+        dropzone.classList.add('is-collapsed');
         recorded.src = URL.createObjectURL(file);
         playback.hidden = false;
       }
@@ -229,12 +257,18 @@
         updateFileState(file);
       });
 
+      fileClear.addEventListener('click', () => {
+        upload.value = '';
+        updateFileState(null);
+      });
+
       const savedAvatarReview = localStorage.getItem('speakup-avatar-review');
       avatarReviewToggle.checked = savedAvatarReview === 'true';
       avatarReviewToggle.addEventListener('change', () => {
         localStorage.setItem('speakup-avatar-review', String(avatarReviewToggle.checked));
       });
 
+      syncPracticeMode(document.querySelector('.tab.is-active')?.dataset.mode || 'live');
       syncThemeToggle();
     </script>
   </body>

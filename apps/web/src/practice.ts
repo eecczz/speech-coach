@@ -10,11 +10,8 @@ import { createLandmarkers, detect } from './mediapipe/landmarkers';
 import { AvatarRecorder } from './recorder/canvas-record';
 import { computeVisionFrame, resetSignalState } from './signals/compute';
 import { SilenceDetector } from './signals/silence';
-import { createAggregatorClient } from './ws/client';
-import { renderReview } from './review/render';
-import type { ComprehensiveReport } from './review/types';
-import { uploadForAnalysis } from './audio-upload';
-import { analyzeUploadedVideo } from './upload-analyze';
+import { createAggregatorClient, createHudClient, type LiveHudResponse } from './ws/client';
+import { savePendingMedia, setPendingAnalysis } from './session-store';
 
 const status = document.getElementById('status') as HTMLDivElement;
 const video = document.getElementById('cam') as HTMLVideoElement;
@@ -24,7 +21,31 @@ const camSelect = document.getElementById('cam-select') as HTMLSelectElement;
 const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
 const recorded = document.getElementById('recorded') as HTMLVideoElement;
-const reviewSection = document.getElementById('review') as HTMLElement;
+
+const params = new URLSearchParams(location.search);
+const projectName = params.get('project') || '오늘의 말하기 연습';
+const typeName = params.get('type') || 'free';
+const goals = (params.get('goal') || '말 속도')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const hudCards = {
+  wpm: document.querySelector<HTMLElement>('[data-hud-card="wpm"]'),
+  filler: document.querySelector<HTMLElement>('[data-hud-card="filler"]'),
+  silence: document.querySelector<HTMLElement>('[data-hud-card="silence"]'),
+};
+
+const SCENARIO_MAP: Record<string, string> = {
+  presentation: 'presentation',
+  interview: 'interview',
+  negotiation: 'presentation',
+  persuasion: 'presentation',
+  daily: 'casual',
+  phone: 'customer_service',
+  online: 'presentation',
+  free: 'presentation',
+};
 
 // Common virtual-camera label fragments. We avoid these on first try because
 // they often output a privacy filter or static image, not the actual user.
@@ -89,6 +110,57 @@ function setStatus(msg: string) {
   console.log('[practice]', msg);
 }
 
+function setHudCard(
+  key: keyof typeof hudCards,
+  value: string,
+  meterPct: number,
+  tone: 'idle' | 'ok' | 'warn' | 'critical' = 'idle',
+) {
+  const card = hudCards[key];
+  if (!card) return;
+  const valueEl = card.querySelector<HTMLElement>('[data-hud-value]');
+  const meterEl = card.querySelector<HTMLElement>('.meter i');
+  card.classList.remove('is-muted', 'is-ok', 'is-warn', 'is-critical');
+  card.classList.add(
+    tone === 'ok' ? 'is-ok' : tone === 'warn' ? 'is-warn' : tone === 'critical' ? 'is-critical' : 'is-muted',
+  );
+  if (valueEl) valueEl.textContent = value;
+  if (meterEl) meterEl.style.width = `${Math.max(0, Math.min(100, meterPct))}%`;
+}
+
+function resetHudCards() {
+  setHudCard('wpm', '—', 0, 'idle');
+  setHudCard('filler', '—', 0, 'idle');
+  setHudCard('silence', '—', 0, 'idle');
+}
+
+function parseHudNumber(text: string): number | null {
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
+}
+
+function syncHudFromResponse(payload: LiveHudResponse, recording: boolean) {
+  if (!recording) return;
+  const byKind = new Map(payload.signals.map((signal) => [signal.kind, signal]));
+  const wpmSignal = byKind.get('wpm_very_high') ?? byKind.get('wpm_high');
+  if (wpmSignal) {
+    const wpm = parseHudNumber(wpmSignal.text) ?? 0;
+    const tone = wpmSignal.level === 'critical' ? 'critical' : 'warn';
+    setHudCard('wpm', `${Math.round(wpm)} WPM`, Math.min(100, (wpm / 240) * 100), tone);
+  } else {
+    setHudCard('wpm', '안정적', 42, 'ok');
+  }
+
+  const fillerSignal = byKind.get('filler_burst');
+  if (fillerSignal) {
+    const count = parseHudNumber(fillerSignal.text) ?? 0;
+    const tone = fillerSignal.level === 'critical' ? 'critical' : 'warn';
+    setHudCard('filler', `${Math.round(count)}회`, Math.min(100, count * 20), tone);
+  } else {
+    setHudCard('filler', '낮음', 18, 'ok');
+  }
+}
+
 async function bootstrap() {
   setStatus('카메라/마이크 권한 요청 중…');
   let stream = await acquireStream();
@@ -133,9 +205,11 @@ async function bootstrap() {
 
   setStatus('준비됨 — 거울처럼 따라옵니다. 녹화를 시작하면 webm 저장됩니다.');
   btnStart.disabled = false;
+  resetHudCards();
 
   const recorder = new AvatarRecorder();
   const aggregator = createAggregatorClient();
+  const hudClient = createHudClient();
   let recording = false;
   let recordingStartTSec = 0;
   let lastSignalSendT = 0;
@@ -149,14 +223,16 @@ async function bootstrap() {
   // calling detectForVideo with interleaved timestamps would break MP's
   // monotonicity guard. Set false to suspend live detect, true to resume.
   let liveDetect = true;
+  const scenario = SCENARIO_MAP[typeName] || 'presentation';
+
+  await hudClient.connect((payload) => {
+    syncHudFromResponse(payload, recording);
+  });
 
   btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
     setStatus('세션 시작 중…');
     sessionId = `sess_${Date.now()}`;
-    // Scenario picks the coach rubric: presentation | interview | vocal | ...
-    // (see services/coach/rubrics/*.yaml). Default 'presentation' if no URL param.
-    const scenario = new URLSearchParams(location.search).get('scenario') || 'presentation';
     resetSignalState();
     await aggregator.start(sessionId, scenario);
     recorder.start(stream); // record the user's video+audio directly (avatar canvas is hidden)
@@ -167,6 +243,7 @@ async function bootstrap() {
     lastSignalSendT = 0;
     lastProsodySendT = 0;
     btnStop.disabled = false;
+    resetHudCards();
     setStatus(`녹화 중… (세션 ${sessionId})`);
   });
 
@@ -179,37 +256,72 @@ async function bootstrap() {
     }
     const rec = await recorder.stop();
     recorded.src = rec.url;
-
-    // Phase 2 audio pipeline — upload webm to /analyze (STT + prosody), merge
-    // result into the bundle via aggregator /session/end. faster-whisper +
-    // librosa on a 1-2 min clip on CPU usually 30-90s, hence the status update.
-    setStatus(`음성 분석 중… (Whisper + 운율, 최대 ~1분)`);
-    let audioResult: Awaited<ReturnType<typeof uploadForAnalysis>> | null = null;
     try {
-      audioResult = await uploadForAnalysis(rec.blob, sessionId);
-      console.log('[audio] analyze result', audioResult);
+      setStatus('코칭 화면으로 이동 중…');
+      const mediaId = await savePendingMedia(rec.blob, `${sessionId}.webm`, rec.blob.type || 'video/webm');
+      setPendingAnalysis({
+        sessionId,
+        project: projectName,
+        goal: goals,
+        type: typeName,
+        source: 'live',
+        createdAt: new Date().toISOString(),
+        mediaId,
+        filename: `${sessionId}.webm`,
+        mimeType: rec.blob.type || 'video/webm',
+        scenario,
+      });
+      const next = new URL('loading.html', location.href);
+      next.searchParams.set('session', sessionId);
+      next.searchParams.set('source', 'live');
+      next.searchParams.set('project', projectName);
+      next.searchParams.set('goal', goals.join(', '));
+      next.searchParams.set('type', typeName);
+      location.href = next.toString();
     } catch (e) {
-      console.warn('[audio] /analyze failed — bundling without server-side audio', e);
+      console.error('[practice] failed to hand off live analysis', e);
+      btnStart.disabled = false;
+      btnStop.disabled = false;
+      setStatus('분석 준비에 실패했어요. 다시 시도해주세요.');
     }
-
-    setStatus(`평가 생성 중…`);
-    const result = await aggregator.end(audioResult);
-    aggregator.close();
-    if (result && (result as { report?: ComprehensiveReport }).report) {
-      const report = (result as { report: ComprehensiveReport }).report;
-      console.log('[coach] result', result);
-      reviewSection.hidden = false;
-      renderReview(report, recorded);
-      setStatus(
-        `평가 완료 — 종합 ${report.accuracy_overall?.toFixed(1) ?? '?'}점, 순간 ${report.annotated_moments?.length ?? 0}개`,
-      );
-      reviewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      console.warn('[coach] result missing or malformed', result);
-      setStatus('녹화 완료 — 평가 서버 응답 없음 (콘솔 확인)');
-    }
-    btnStart.disabled = false;
   });
+
+  const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
+  const analyzeUploadBtn = document.getElementById('btn-analyze') as HTMLButtonElement | null;
+  if (uploadInput && analyzeUploadBtn) {
+    analyzeUploadBtn.addEventListener('click', async () => {
+      const file = uploadInput.files?.[0];
+      if (!file) return;
+      analyzeUploadBtn.disabled = true;
+      try {
+        const sessionKey = `upload_${Date.now()}`;
+        const mediaId = await savePendingMedia(file, file.name, file.type || 'video/mp4');
+        setPendingAnalysis({
+          sessionId: sessionKey,
+          project: projectName,
+          goal: goals,
+          type: typeName,
+          source: 'upload',
+          createdAt: new Date().toISOString(),
+          mediaId,
+          filename: file.name,
+          mimeType: file.type || 'video/mp4',
+          scenario,
+        });
+        const next = new URL('loading.html', location.href);
+        next.searchParams.set('session', sessionKey);
+        next.searchParams.set('source', 'upload');
+        next.searchParams.set('project', projectName);
+        next.searchParams.set('goal', goals.join(', '));
+        next.searchParams.set('type', typeName);
+        location.href = next.toString();
+      } catch (e) {
+        console.error('[practice] failed to queue uploaded analysis', e);
+        analyzeUploadBtn.disabled = false;
+        setStatus('업로드 영상을 준비하지 못했어요. 다시 시도해주세요.');
+      }
+    });
+  }
 
   // Animation loop with diagnostics
   let lastT = performance.now();
@@ -291,6 +403,13 @@ async function bootstrap() {
               silence_seconds: silenceSeconds,
               rms_mean: rmsMean,
             });
+            const tone = silenceSeconds >= 4 ? 'warn' : silenceSeconds >= 2 ? 'ok' : 'idle';
+            setHudCard(
+              'silence',
+              silenceSeconds > 0.1 ? `${silenceSeconds.toFixed(1)}초` : '짧음',
+              Math.min(100, (silenceSeconds / 4) * 100),
+              tone,
+            );
             silenceDetector.resetWindow();
             lastProsodySendT = sessionT;
           }
@@ -323,51 +442,11 @@ async function bootstrap() {
     }
   });
 
-  // ── Uploaded-video flow ──
-  // Wires #btn-analyze (in the upload section above the recording stage) to the
-  // upload-analyze pipeline. Re-uses the same landmarkers + aggregator + review
-  // section the live flow uses, so evaluation depth is identical.
-  const btnAnalyze = document.getElementById('btn-analyze') as HTMLButtonElement | null;
-  const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
-  if (btnAnalyze && uploadInput) {
-    btnAnalyze.addEventListener('click', async (ev) => {
-      // The inline JS in practice.html still navigates to loading.html — prevent
-      // that so our handler can run instead. (We also clear that handler in the
-      // HTML, but defense-in-depth is fine.)
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      const file = uploadInput.files?.[0];
-      if (!file) {
-        setStatus('영상 파일을 먼저 선택해 주세요');
-        return;
-      }
-      btnAnalyze.disabled = true;
-      btnStart.disabled = true;
-      liveDetect = false; // suspend live tick — upload flow drives the landmarker
-      const scenario =
-        new URLSearchParams(location.search).get('scenario') || 'presentation';
-      try {
-        await analyzeUploadedVideo(file, {
-          scenario,
-          landmarkers,
-          aggregator,
-          setStatus,
-          reviewSection,
-          reviewVideo: recorded,
-        });
-      } catch (e) {
-        console.error('[upload] flow failed', e);
-        setStatus(`업로드 분석 실패: ${e instanceof Error ? e.message : String(e)}`);
-      } finally {
-        btnAnalyze.disabled = false;
-        // Leave btnStart disabled — user is reviewing the upload result, and the
-        // aggregator session was closed by analyzeUploadedVideo. A fresh page
-        // load is the cleanest path back to a live recording.
-        // liveDetect stays false so the live camera doesn't keep firing MP detect
-        // on top of the review playback.
-      }
-    });
-  }
+  window.addEventListener('pagehide', () => {
+    hudClient.close();
+    aggregator.close();
+  });
+
 }
 
 bootstrap().catch((err) => {
