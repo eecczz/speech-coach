@@ -17,7 +17,7 @@ import { getLandmarksAtTime, type LandmarkSnapshot, type Point2 } from '../signa
 // Korean filler dictionary — mirrors services/audio-pipeline/app/prosody.py so
 // the subtitle can highlight the same words that triggered FILLER_BURST events.
 const KOREAN_FILLERS = new Set([
-  '음', '어', '그', '그니까', '그러니까', '이제',
+  '음', '어', '아', '에', '저', '저기', '그', '그게', '그니까', '그러니까', '이제',
   '뭐', '약간', '막', '근데',
   '음...', '어...', '에...',
 ]);
@@ -98,12 +98,12 @@ function renderCoachBubble(
   let html = `
     <div class="bubble-head">
       <span class="bubble-icon" style="color:${meta.color}">${meta.icon}</span>
-      <span class="bubble-time">${formatTime(primary.t)}</span>
+      <span class="bubble-time">${formatMomentTime(primary)}</span>
       <span class="bubble-quality">${meta.label}</span>
       <span class="bubble-axis">${AXIS_LABEL[primary.axis] ?? primary.axis}</span>
     </div>
-    <div class="bubble-title">${escapeHtml(primary.title)}</div>
-    <div class="bubble-comment">${escapeHtml(primary.coach_comment ?? '(코멘트 없음)')}</div>
+    <div class="bubble-title">${escapeHtml(humanizeCoachText(primary.title))}</div>
+    <div class="bubble-comment">${escapeHtml(humanizeCoachText(primary.coach_comment ?? '(코멘트 없음)'))}</div>
   `;
   if (others.length > 0) {
     html += `
@@ -117,8 +117,8 @@ function renderCoachBubble(
                 <li class="bubble-concurrent-item moment-${c.quality}" data-other-index="${otherIndices[k]}">
                   <span class="bubble-concurrent-icon" style="color:${cMeta.color}">${cMeta.icon}</span>
                   <span class="bubble-concurrent-axis">${AXIS_LABEL[c.axis] ?? c.axis}</span>
-                  <span class="bubble-concurrent-title">${escapeHtml(c.title)}</span>
-                  ${c.coach_comment ? `<div class="bubble-concurrent-comment">${escapeHtml(c.coach_comment)}</div>` : ''}
+                  <span class="bubble-concurrent-title">${escapeHtml(humanizeCoachText(c.title))}</span>
+                  ${c.coach_comment ? `<div class="bubble-concurrent-comment">${escapeHtml(humanizeCoachText(c.coach_comment))}</div>` : ''}
                 </li>
               `;
             })
@@ -149,11 +149,13 @@ const REVIEW_TEMPLATE = `
   <div class="review-controls">
     <button data-el="prev">← 이전</button>
     <button data-el="next">다음 →</button>
-    <span class="kbd-hint">키보드 ← / → 로도 이동</span>
+    <button data-el="overlay-toggle" class="overlay-toggle" type="button" aria-pressed="true">오버레이 켜짐</button>
+    <button data-el="subtitle-toggle" class="subtitle-toggle" type="button" aria-pressed="true">자막 켜짐</button>
   </div>
 
   <div class="review-grid">
     <div class="review-left">
+      <div class="pdf-video-note">PDF에는 영상이 포함되지 않습니다. 주요 순간, 총평, 전사 확인 표현, 측정 지표가 저장됩니다.</div>
       <div class="video-overlay-wrap">
         <video data-el="video" controls playsinline></video>
         <div data-el="overlay" class="video-mistake-overlay"></div>
@@ -173,6 +175,18 @@ const REVIEW_TEMPLATE = `
   <ol data-el="moments-list" class="moments"></ol>
   <h3 class="panel-h">총평</h3>
   <p data-el="summary" class="summary"></p>
+  <section data-el="transcript-check-panel" class="transcript-check-panel" hidden>
+    <h3 class="panel-h">전사 확인 필요 표현</h3>
+    <ul data-el="transcript-check-list" class="transcript-check-list"></ul>
+  </section>
+  <section data-el="metrics-panel" class="metrics-panel">
+    <h3 class="panel-h">측정 지표</h3>
+    <div data-el="metrics" class="metrics-grid"></div>
+  </section>
+  <section data-el="transcript-panel" class="transcript-panel" hidden>
+    <h3 class="panel-h">전사 텍스트</h3>
+    <p data-el="transcript-text" class="transcript-text"></p>
+  </section>
 `;
 
 export interface ReviewController {
@@ -200,6 +214,8 @@ export function renderReview(
   const $impact   = $<HTMLDivElement>('coach-impact');
   const $prev     = $<HTMLButtonElement>('prev');
   const $next     = $<HTMLButtonElement>('next');
+  const $overlayToggle = $<HTMLButtonElement>('overlay-toggle');
+  const $subtitleToggle = $<HTMLButtonElement>('subtitle-toggle');
   const $video    = $<HTMLVideoElement>('video');
   const $overlay  = $<HTMLDivElement>('overlay');
   const $subtitle = $<HTMLDivElement>('subtitle');
@@ -208,6 +224,11 @@ export function renderReview(
   const $buckets  = $<HTMLDivElement>('buckets');
   const $list     = $<HTMLOListElement>('moments-list');
   const $summary  = $<HTMLParagraphElement>('summary');
+  const $transcriptCheckPanel = $<HTMLElement>('transcript-check-panel');
+  const $transcriptCheckList = $<HTMLUListElement>('transcript-check-list');
+  const $metrics  = $<HTMLDivElement>('metrics');
+  const $transcriptPanel = $<HTMLElement>('transcript-panel');
+  const $transcriptText = $<HTMLParagraphElement>('transcript-text');
 
   // STT segments shipped with the report (from /analyze). Empty when STT didn't
   // run for this session → subtitle stays hidden. The rAF overlay loop reads
@@ -221,12 +242,32 @@ export function renderReview(
   const moments = report.annotated_moments ?? [];
   const timeline = report.score_timeline ?? [];
   let current = 0;
+  let overlayEnabled = localStorage.getItem('speakup-review-overlay') !== 'false';
+  let subtitleEnabled = localStorage.getItem('speakup-review-subtitle') !== 'false';
 
   $overall.textContent = `${report.accuracy_overall.toFixed(1)}%`;
-  $summary.textContent = report.overall_summary ?? '';
+  $summary.textContent = humanizeCoachText(report.overall_summary ?? '');
 
   renderAxes($axes, report.accuracy_per_axis ?? []);
   renderBuckets($buckets, report.quality_buckets);
+  renderMetrics($metrics, report.accuracy_per_axis ?? []);
+  renderTranscriptChecks(
+    $transcriptCheckPanel,
+    $transcriptCheckList,
+    report.transcript_checks ?? [],
+    (t) => {
+      $video.currentTime = t;
+      void $video.play().catch(() => {});
+    },
+  );
+  syncOverlayToggle();
+  syncSubtitleToggle();
+
+  const transcriptText = buildTranscriptText(subtitleSegs);
+  if (transcriptText) {
+    $transcriptPanel.hidden = false;
+    $transcriptText.textContent = transcriptText;
+  }
 
   // ── moments list
   moments.forEach((m, i) => {
@@ -235,10 +276,10 @@ export function renderReview(
     li.dataset.index = String(i);
     const meta = QUALITY_META[m.quality];
     li.innerHTML = `
-      <span class="moment-time">${formatTime(m.t)}</span>
+      <span class="moment-time">${formatMomentTime(m)}</span>
       <span class="moment-icon" style="color:${meta.color}">${meta.icon}</span>
       <span class="moment-axis">${AXIS_LABEL[m.axis] ?? m.axis}</span>
-      <span class="moment-title">${escapeHtml(m.title)}</span>
+      <span class="moment-title">${escapeHtml(humanizeCoachText(m.title))}</span>
       <span class="moment-impact">${m.impact >= 0 ? '+' : ''}${m.impact}</span>
     `;
     li.addEventListener('click', () => selectIndex(i));
@@ -266,8 +307,9 @@ export function renderReview(
   }
 
   function updateSubtitle(): void {
-    if (subtitleSegs.length === 0) {
+    if (!subtitleEnabled || subtitleSegs.length === 0) {
       $subtitle.classList.remove('subtitle-visible');
+      $subtitle.innerHTML = '';
       return;
     }
     const t = $video.currentTime;
@@ -299,8 +341,12 @@ export function renderReview(
 
   function renderOverlayAtCurrentTime(): void {
     const t = $video.currentTime;
-    // Pinned moments stay on-screen; circles re-pick body coords for THIS instant.
-    renderMistakeMarkers($overlay, pinnedMoments, t);
+    if (overlayEnabled) {
+      // Pinned moments stay on-screen; circles re-pick body coords for THIS instant.
+      renderMistakeMarkers($overlay, pinnedMoments, t);
+    } else {
+      $overlay.innerHTML = '';
+    }
     updateSubtitle();
   }
 
@@ -328,6 +374,19 @@ export function renderReview(
     if (selected) {
       try { $video.currentTime = selected.t; } catch { /* video not seekable yet */ }
     }
+    renderOverlayAtCurrentTime();
+  });
+
+  $overlayToggle.addEventListener('click', () => {
+    overlayEnabled = !overlayEnabled;
+    localStorage.setItem('speakup-review-overlay', String(overlayEnabled));
+    syncOverlayToggle();
+    renderOverlayAtCurrentTime();
+  });
+  $subtitleToggle.addEventListener('click', () => {
+    subtitleEnabled = !subtitleEnabled;
+    localStorage.setItem('speakup-review-subtitle', String(subtitleEnabled));
+    syncSubtitleToggle();
     renderOverlayAtCurrentTime();
   });
 
@@ -393,6 +452,18 @@ export function renderReview(
 
     $prev.disabled = clamped === 0;
     $next.disabled = clamped === moments.length - 1;
+  }
+
+  function syncOverlayToggle(): void {
+    $overlayToggle.classList.toggle('is-active', overlayEnabled);
+    $overlayToggle.setAttribute('aria-pressed', String(overlayEnabled));
+    $overlayToggle.textContent = overlayEnabled ? '오버레이 켜짐' : '오버레이 꺼짐';
+  }
+
+  function syncSubtitleToggle(): void {
+    $subtitleToggle.classList.toggle('is-active', subtitleEnabled);
+    $subtitleToggle.setAttribute('aria-pressed', String(subtitleEnabled));
+    $subtitleToggle.textContent = subtitleEnabled ? '자막 켜짐' : '자막 꺼짐';
   }
 
   if (moments.length > 0) selectIndex(0);
@@ -542,16 +613,17 @@ function renderMistakeMarkers(
   const snap = getLandmarksAtTime(currentT, 0.4);
   const placedGlyphs: Array<{ x: number; y: number }> = [];
 
-  for (const m of moments) {
+  for (const [idx, m] of moments.entries()) {
     const meta = QUALITY_META[m.quality];
     const isCaption = m.axis === 'delivery' || m.axis === 'logic';
+    const isPrimary = idx === 0;
 
     // Caption-strip moments: skip bone, drop a compact badge in the verbal strip
     // (subtitle word-highlight does the precise "what word" pinpointing).
     if (isCaption) {
       const [px, py] = AXIS_REGION[m.axis] ?? AXIS_REGION.gesture;
       const positioned = staggerIfNeeded(px, py, placedGlyphs);
-      overlay.appendChild(renderMarkerBadge(m, meta, positioned.x, positioned.y, true));
+      overlay.appendChild(renderMarkerBadge(m, meta, positioned.x, positioned.y, true, isPrimary));
       continue;
     }
 
@@ -584,7 +656,7 @@ function renderMistakeMarkers(
     cx = (cx / bones.length) * 100;
     cy = (cy / bones.length) * 100;
     const positioned = staggerIfNeeded(cx, cy, placedGlyphs);
-    overlay.appendChild(renderMarkerBadge(m, meta, positioned.x, Math.max(8, positioned.y - 8), false));
+    overlay.appendChild(renderMarkerBadge(m, meta, positioned.x, Math.max(8, positioned.y - 8), false, isPrimary));
   }
 
   // Append SVG once after collecting all bones (avoids z-order surprises —
@@ -626,20 +698,23 @@ function renderMarkerBadge(
   x: number,
   y: number,
   caption: boolean,
+  primary = true,
 ): HTMLDivElement {
   const el = document.createElement('div');
-  el.className = `analysis-marker quality-${m.quality}${caption ? ' analysis-marker-caption' : ''}`;
+  el.className = `analysis-marker quality-${m.quality}${caption ? ' analysis-marker-caption' : ''}${primary ? '' : ' analysis-marker-secondary'}`;
   el.style.setProperty('--marker-color', meta.color);
   el.style.left = `${clampPct(x)}%`;
   el.style.top = `${clampPct(y)}%`;
-  el.innerHTML = `
-    <span class="analysis-marker-dot"></span>
-    <span class="analysis-marker-copy">
-      <strong>${escapeHtml(AXIS_LABEL[m.axis] ?? m.axis)}</strong>
-      <em>${escapeHtml(meta.label)}</em>
-    </span>
-  `;
-  el.title = m.title;
+  el.innerHTML = primary
+    ? `
+      <span class="analysis-marker-dot"></span>
+      <span class="analysis-marker-copy">
+        <strong>${escapeHtml(AXIS_LABEL[m.axis] ?? m.axis)}</strong>
+        <em>${escapeHtml(meta.label)}</em>
+      </span>
+    `
+    : `<span class="analysis-marker-dot"></span>`;
+  el.title = humanizeCoachText(m.title);
   return el;
 }
 
@@ -668,13 +743,45 @@ function staggerIfNeeded(
   return { x: adjusted, y };
 }
 
+function humanizeCoachText(text: string): string {
+  return text
+    .replace(/전달력\(Delivery\)/g, '전달력')
+    .replace(/시선 처리\(Gaze\)/g, '시선 처리')
+    .replace(/\bDelivery\b/g, '전달력')
+    .replace(/\bGaze\b/g, '시선')
+    .replace(/세션 평균\s*WPM\s*([0-9.]+)/g, '세션 평균 말 속도는 분당 $1어절')
+    .replace(/말 속도 급상승:\s*WPM\s*([0-9.]+)/g, '말 속도 급상승: 분당 $1어절')
+    .replace(/말 속도 느림:\s*WPM\s*([0-9.]+)/g, '말 속도 느림: 분당 $1어절')
+    .replace(/평균\s*WPM\s*([0-9.]+)\s*은/g, '평균 말 속도는 분당 $1어절로')
+    .replace(/평균\s*WPM\s*([0-9.]+)/g, '평균 말 속도는 분당 $1어절')
+    .replace(/\bWPM\s*([0-9.]+)/g, '분당 $1어절')
+    .replace(/\bWPM\b/g, '분당 말한 어절 수')
+    .replace(/시선 중앙 유지율/g, '정면을 바라본 비율')
+    .replace(
+      /전사 텍스트\s*(?:상에서|상으로|기준으로|기준)?[^.]*?(?:의미 전달이 불분명|논리적 명료성|명료성 개선)[^.]*\./g,
+      '전사 텍스트에 어색한 표현 후보가 있어 STT 오인식 가능성을 확인해야 하며, 언어와 논리 평가는 참고용으로 보는 것이 안전합니다.',
+    )
+    .replace(/더딘 및\s*/g, '')
+    .replace(/\bfiller\b/gi, '필러 표현')
+    .replace(/\btranscript\b/gi, '전사 텍스트');
+}
+
+function buildTranscriptText(segments: SubtitleSegment[]): string {
+  return segments
+    .map((seg) => seg.text.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function renderAxes(el: HTMLElement, axes: AxisAccuracy[]): void {
   el.innerHTML = '';
   for (const a of axes) {
     const row = document.createElement('div');
     row.className = 'axis-row';
     const w = a.available ? Math.max(0, Math.min(100, a.score)) : 0;
-    const note = !a.available ? a.note ?? 'N/A' : '';
+    const note = a.note ? humanizeCoachText(a.note) : (!a.available ? 'N/A' : '');
     row.innerHTML = `
       <span class="axis-label">${AXIS_LABEL[a.axis] ?? a.axis}</span>
       <span class="axis-bar"><span class="axis-fill" style="width:${w}%"></span></span>
@@ -682,6 +789,55 @@ function renderAxes(el: HTMLElement, axes: AxisAccuracy[]): void {
       <span class="axis-note">${escapeHtml(note)}</span>
     `;
     el.appendChild(row);
+  }
+}
+
+function renderMetrics(el: HTMLElement, axes: AxisAccuracy[]): void {
+  el.innerHTML = '';
+  for (const a of axes) {
+    const cell = document.createElement('div');
+    cell.className = `metric-cell metric-${a.axis}`;
+    const label = AXIS_LABEL[a.axis] ?? a.axis;
+    const score = a.available ? `${a.score.toFixed(0)}점` : '측정 불가';
+    const note = a.note ? humanizeCoachText(a.note) : (a.available ? '측정 근거 수집됨' : '데이터 부족');
+    cell.innerHTML = `
+      <span class="metric-label">${escapeHtml(label)}</span>
+      <strong class="metric-score">${escapeHtml(score)}</strong>
+      <span class="metric-note">${escapeHtml(note)}</span>
+    `;
+    el.appendChild(cell);
+  }
+}
+
+function renderTranscriptChecks(
+  panel: HTMLElement,
+  list: HTMLUListElement,
+  checks: NonNullable<ComprehensiveReport['transcript_checks']>,
+  onSeek: (t: number) => void,
+): void {
+  list.innerHTML = '';
+  panel.hidden = checks.length === 0;
+  if (checks.length === 0) return;
+
+  for (const check of checks.slice(0, 3)) {
+    const li = document.createElement('li');
+    li.className = 'transcript-check-item';
+    const hasTime = typeof check.t_start === 'number';
+    const time = hasTime ? formatTime(check.t_start as number) : null;
+    li.innerHTML = `
+      <div class="transcript-check-main">
+        <span class="transcript-check-phrase">"${escapeHtml(check.phrase)}"</span>
+        ${check.suggestion ? `<span class="transcript-check-arrow">→</span><span class="transcript-check-suggestion">"${escapeHtml(check.suggestion)}"</span>` : ''}
+      </div>
+      <p>${escapeHtml(check.reason)}</p>
+      ${time ? `<button type="button" class="transcript-check-time">${time} 확인</button>` : ''}
+    `;
+    if (hasTime) {
+      li.querySelector<HTMLButtonElement>('.transcript-check-time')?.addEventListener('click', () => {
+        onSeek(Math.max(0, (check.t_start ?? 0) - 0.4));
+      });
+    }
+    list.appendChild(li);
   }
 }
 
@@ -765,10 +921,18 @@ function renderTimeline(
     c.setAttribute('fill', QUALITY_META[m.quality].color);
     c.addEventListener('click', () => onDot(i));
     const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-    title.textContent = `${formatTime(m.t)} ${m.title}`;
+    title.textContent = `${formatMomentTime(m)} ${m.title}`;
     c.appendChild(title);
     svg.appendChild(c);
   });
+}
+
+function formatMomentTime(moment: AnnotatedMoment): string {
+  const duration = moment.duration_s ?? 0;
+  if (duration >= 1.5) {
+    return `${formatTime(moment.t)}-${formatTime(moment.t + duration)}`;
+  }
+  return formatTime(moment.t);
 }
 
 function formatTime(s: number): string {

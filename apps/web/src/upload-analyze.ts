@@ -28,6 +28,7 @@ const SEEK_FALLBACK_TIMEOUT_MS = 3000;
 
 export interface UploadAnalyzeContext {
   scenario: string;
+  focusGoals: string[];
   landmarkers: Landmarkers;
   aggregator: AggregatorClient;
   setStatus: (msg: string) => void;
@@ -67,7 +68,7 @@ export async function analyzeUploadedVideo(
     // Start an aggregator session keyed to this upload, using the chosen scenario.
     const sessionId = `upload_${Date.now()}`;
     resetSignalState();
-    await ctx.aggregator.start(sessionId, ctx.scenario);
+    await ctx.aggregator.start(sessionId, ctx.scenario, ctx.focusGoals);
 
     // ── Vision: play + sample loop ──
     probe.playbackRate = PLAYBACK_RATE;

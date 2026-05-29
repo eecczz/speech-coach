@@ -42,6 +42,7 @@ export const ProsodyFrameSchema = z.object({
   t_start: z.number().min(0),
   t_end: z.number().min(0),
   wpm: z.number().min(0).default(0),
+  word_count: z.number().int().min(0).default(0),
   filler_count: z.number().int().min(0).default(0),
   filler_terms: z.array(z.string()).default([]),
   pause_seconds: z.number().min(0).default(0),

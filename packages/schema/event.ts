@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 export const EventKindSchema = z.enum([
   'wpm_spike',
+  'wpm_slow',
   'long_pause',
   'filler_burst',
   'gaze_lapse',
@@ -16,6 +17,15 @@ export const EventKindSchema = z.enum([
   'chin_on_hand',
   'expression_flat',
   'hand_freeze',
+  'gesture_excessive',
+  'monotone',
+  'sentence_trailing',
+  'slurred_articulation',
+  'face_touch',
+  'hand_fidget',
+  'motion_hesitation',
+  'low_smile',
+  'gaze_wander',
   'silence_long',
   'voice_flat',
   'aggregate',
@@ -38,6 +48,8 @@ export type SemanticEvent = z.infer<typeof SemanticEventSchema>;
 // Bundle sent to coach /comprehensive at session end.
 export const SessionBundleSchema = z.object({
   session_id: z.string(),
+  scenario: z.string().default('presentation'),
+  focus_goals: z.array(z.string()).default([]),
   duration_s: z.number().min(0),
   full_transcript: z.string(),
   // Word-level transcript for evidence_clip precision.

@@ -19,6 +19,7 @@ from .report import (
     AnnotatedMoment,
     SubtitleSegment,
     SubtitleWord,
+    TranscriptCheck,
     ComprehensiveReport,
 )
 
@@ -43,5 +44,6 @@ __all__ = [
     "AnnotatedMoment",
     "SubtitleSegment",
     "SubtitleWord",
+    "TranscriptCheck",
     "ComprehensiveReport",
 ]

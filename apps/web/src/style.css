@@ -1020,9 +1020,20 @@ button:disabled {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 .review-controls button { min-height: 38px; padding: 0 14px; font-size: 0.86rem; }
-.kbd-hint { color: var(--text-subtle); font-size: 0.78rem; margin-left: auto; }
+.review-controls .overlay-toggle,
+.review-controls .subtitle-toggle {
+  margin-left: 6px;
+  border-color: var(--line-strong);
+}
+.review-controls .overlay-toggle.is-active,
+.review-controls .subtitle-toggle.is-active {
+  background: var(--text);
+  color: var(--card);
+  border-color: var(--text);
+}
 
 .review-grid {
   display: grid;
@@ -1041,6 +1052,16 @@ button:disabled {
   border-radius: var(--radius-md);
   overflow: hidden;
   background: #20242c;
+}
+.pdf-video-note {
+  display: none;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-strong);
+  color: var(--text-subtle);
+  font-size: 0.82rem;
+  line-height: 1.55;
 }
 .video-overlay-wrap video {
   display: block;
@@ -1099,6 +1120,13 @@ button:disabled {
 .analysis-marker-caption {
   transform: translate(-50%, -50%);
 }
+.analysis-marker-secondary {
+  min-width: 0;
+  padding: 6px;
+  gap: 0;
+  opacity: 0.86;
+  transform: translate(-50%, -50%);
+}
 .analysis-marker-dot {
   flex: 0 0 auto;
   width: 10px;
@@ -1106,6 +1134,10 @@ button:disabled {
   border-radius: 999px;
   background: var(--marker-color);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--marker-color) 22%, transparent);
+}
+.analysis-marker-secondary .analysis-marker-dot {
+  width: 12px;
+  height: 12px;
 }
 .analysis-marker-copy {
   display: grid;
@@ -1237,7 +1269,7 @@ button:disabled {
 .axes { display: grid; gap: 6px; }
 .axis-row {
   display: grid;
-  grid-template-columns: 56px 1fr 44px auto;
+  grid-template-columns: 56px minmax(120px, 1fr) 44px minmax(120px, 1.1fr);
   gap: 8px;
   align-items: center;
   font-size: 0.82rem;
@@ -1255,7 +1287,45 @@ button:disabled {
   background: var(--secondary);
 }
 .axis-score { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
-.axis-note { color: var(--text-subtle); font-size: 0.72rem; }
+.axis-note {
+  color: var(--text-subtle);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.metrics-panel {
+  display: grid;
+  gap: 8px;
+}
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.metric-cell {
+  display: grid;
+  gap: 4px;
+  min-height: 106px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-strong);
+}
+.metric-label {
+  color: var(--text-subtle);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+.metric-score {
+  color: var(--text);
+  font-size: 1.12rem;
+  line-height: 1.1;
+}
+.metric-note {
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
 
 .buckets {
   display: grid;
@@ -1291,7 +1361,7 @@ button:disabled {
 }
 .moments li {
   display: grid;
-  grid-template-columns: 54px 24px 56px 1fr 54px;
+  grid-template-columns: 96px 24px 56px minmax(0, 1fr) 54px;
   gap: 8px;
   align-items: center;
   padding: 8px 12px;
@@ -1306,7 +1376,11 @@ button:disabled {
   outline: 1px solid var(--line-strong);
   outline-offset: -1px;
 }
-.moment-time { color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.moment-time {
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .moment-icon { font-weight: 700; text-align: center; }
 .moment-axis { color: var(--text-subtle); font-size: 0.78rem; }
 .moment-title {
@@ -1331,10 +1405,96 @@ button:disabled {
   font-size: 0.88rem;
 }
 
+.transcript-check-panel {
+  display: grid;
+  gap: 8px;
+}
+.transcript-check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.transcript-check-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-strong);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+}
+.transcript-check-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.transcript-check-arrow {
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+.transcript-check-suggestion {
+  color: var(--accent);
+}
+.transcript-check-item p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+.transcript-check-time {
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  justify-self: start;
+  width: fit-content;
+  min-width: 88px;
+}
+.transcript-check-time:hover {
+  border-color: var(--line-strong);
+}
+
+.transcript-panel {
+  display: grid;
+  gap: 8px;
+}
+.transcript-text {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-strong);
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 720px) {
   .review-grid { grid-template-columns: 1fr; }
   .review-header { grid-template-columns: auto 1fr; }
   .impact-pill { grid-column: 1 / -1; }
+  .axis-row {
+    grid-template-columns: 56px 1fr 44px;
+  }
+  .axis-note {
+    grid-column: 2 / -1;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Concurrent moments — same time-window, multiple simultaneous mistakes. */
@@ -1395,6 +1555,66 @@ button:disabled {
   color: var(--text-subtle);
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+@media print {
+  :root {
+    --bg: #ffffff;
+    --card: #ffffff;
+    --card-strong: #ffffff;
+    --text: #111827;
+    --text-subtle: #4b5563;
+    --line: #d1d5db;
+  }
+  body {
+    background: #ffffff;
+  }
+  .topbar,
+  .progress-steps,
+  .report-actions,
+  .review-controls,
+  .video-overlay-wrap,
+  [data-el="timeline"] {
+    display: none !important;
+  }
+  .report-shell {
+    width: 100%;
+    padding: 0;
+  }
+  .report-hero {
+    margin: 0 0 14px;
+  }
+  .pdf-video-note {
+    display: block;
+  }
+  #review {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+    gap: 12px;
+  }
+  .review-header,
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+  .coach-bubble,
+  .summary,
+  .transcript-check-item,
+  .transcript-text,
+  .metrics-panel,
+  .metric-cell,
+  .moments,
+  .bucket-cell,
+  .overall-card {
+    break-inside: avoid;
+  }
+  .moments {
+    max-height: none;
+    overflow: visible;
+  }
+  .transcript-check-time {
+    display: none;
+  }
 }
 
 /* ─── TEMP: 평가용으로 아바타 숨기고 카메라를 메인 화면으로 ───

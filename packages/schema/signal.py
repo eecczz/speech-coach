@@ -66,6 +66,9 @@ class ProsodyFrame(BaseModel):
     t_start: float = Field(ge=0)
     t_end: float = Field(ge=0)
     wpm: float = Field(default=0.0, ge=0)
+    # Number of STT words/eojeols in this frame. This lets the aggregator compute
+    # session-level WPM from actual counts instead of averaging per-segment rates.
+    word_count: int = Field(default=0, ge=0)
     filler_count: int = Field(default=0, ge=0)
     filler_terms: List[str] = Field(default_factory=list)
     pause_seconds: float = Field(default=0.0, ge=0)

@@ -9,6 +9,8 @@ domain (presentation vs dating vs interview).
 
 from __future__ import annotations
 
+import os
+import statistics
 from typing import List
 
 from packages.schema import (
@@ -20,8 +22,14 @@ from packages.schema.event import SessionAggregates, WordSpan
 from .session import Session
 
 WPM_SPIKE_MULTIPLIER = 1.4
+WPM_EVENT_MIN_SEGMENT_S = 2.0
+WPM_EVENT_MIN_DELTA = 45.0
+WPM_SLOW_CUTOFF = 95.0
 LONG_PAUSE_S = 3.0
 FILLER_BURST_PER_MIN = 10
+FILLER_BURST_MIN_COUNT = 2
+FILLER_BURST_MIN_WINDOW_MIN = 0.25
+SMILE_SIGNAL_SCENARIOS = {"dating", "customer_service", "casual"}
 GAZE_LAPSE_RATIO = 0.4          # was 0.3 — with pupil-aware gaze, head-only "OK"
                                 # frames now also need centered eyes; mild drift counts
 GAZE_LAPSE_MIN_S = 3.0          # was 5.0 — shorter dwell catches brief look-aways
@@ -70,23 +78,19 @@ SENTENCE_TRAILING_RATIO = 0.55   # end-0.5s rms < 55% of segment mean = trailing
 SENTENCE_TRAILING_MIN_COUNT = 3  # ≥ 3 trailing endings in session ⇒ pattern
 SLURRED_ARTICULATION_PROB = 0.55 # mean word probability < 0.55 = unclear
 SLURRED_MIN_SEGMENTS = 3
+DEBUG_EVENTS = os.environ.get("AGGREGATOR_DEBUG_EVENTS") == "1"
 
 
 def _avg(xs: List[float]) -> float:
     return sum(xs) / len(xs) if xs else 0.0
 
 
-def derive_events(session: Session) -> List[SemanticEvent]:
-    events: List[SemanticEvent] = []
-
-    # ── DIAGNOSTIC: dump session signal state so we can see whether vision frames
-    # actually arrived and what the detectors are seeing. Remove once the non-verbal
-    # pipeline is verified end-to-end.
+def _debug_signal_snapshot(session: Session) -> None:
     vf = session.vision_frames
     pf = session.prosody_frames
     print(f"[derive] vision_frames={len(vf)} prosody_frames={len(pf)} stt_segments={len(session.stt_segments)}", flush=True)
     if vf:
-        sample = vf[len(vf) // 2]  # mid-session sample
+        sample = vf[len(vf) // 2]
         print(
             f"[derive] vision sample @ t={sample.t:.1f}s: "
             f"gaze={sample.gaze_fixation_ratio:.2f} sway={sample.posture_sway:.3f} "
@@ -96,10 +100,11 @@ def derive_events(session: Session) -> List[SemanticEvent]:
             f"chin={sample.chin_on_hand} mouth={sample.mouth_open:.2f}",
             flush=True,
         )
-        # Min/max of each signal — quickly tells us if a detector is starved or saturated.
+
         def rng(name, getter):
             xs = [getter(f) for f in vf]
             return f"{name}=[{min(xs):.3f}, {max(xs):.3f}]"
+
         print(
             f"[derive] vision ranges: "
             f"{rng('gaze', lambda f: f.gaze_fixation_ratio)} "
@@ -116,19 +121,60 @@ def derive_events(session: Session) -> List[SemanticEvent]:
         print("[derive] WARNING — no vision frames in session. Browser→/ws/signals likely never sent them, "
               "or the WS disconnected before frames flowed.", flush=True)
 
+
+def derive_events(session: Session) -> List[SemanticEvent]:
+    events: List[SemanticEvent] = []
+
+    if DEBUG_EVENTS:
+        _debug_signal_snapshot(session)
+
     # --- Prosody-driven events ---
     if session.prosody_frames:
         wpms = [p.wpm for p in session.prosody_frames if p.wpm > 0]
-        mean_wpm = _avg(wpms)
+        reliable_wpms = [
+            p.wpm for p in session.prosody_frames
+            if p.wpm > 0 and (p.t_end - p.t_start) >= WPM_EVENT_MIN_SEGMENT_S
+        ]
+        baseline_wpm = (
+            statistics.median(reliable_wpms)
+            if len(reliable_wpms) >= 3
+            else _avg(wpms)
+        )
         for p in session.prosody_frames:
-            if mean_wpm > 0 and p.wpm > mean_wpm * WPM_SPIKE_MULTIPLIER:
+            seg_dur = max(0.0, p.t_end - p.t_start)
+            spike_cutoff = max(
+                baseline_wpm * WPM_SPIKE_MULTIPLIER,
+                baseline_wpm + WPM_EVENT_MIN_DELTA,
+            )
+            if (
+                baseline_wpm > 0
+                and seg_dur >= WPM_EVENT_MIN_SEGMENT_S
+                and p.wpm > spike_cutoff
+            ):
                 events.append(
                     SemanticEvent(
                         kind=EventKind.WPM_SPIKE,
                         t_start=p.t_start,
                         t_end=p.t_end,
-                        text=f"말 속도 spike: WPM {p.wpm:.0f} (세션 평균 {mean_wpm:.0f}, +{(p.wpm/mean_wpm - 1)*100:.0f}%)",
-                        metrics={"wpm": p.wpm, "session_mean_wpm": mean_wpm},
+                        text=f"말 속도 급상승: WPM {p.wpm:.0f} (기준 {baseline_wpm:.0f}, +{(p.wpm/baseline_wpm - 1)*100:.0f}%)",
+                        transcript_snippet=_transcript_around(session, p.t_start + seg_dur / 2),
+                        metrics={"wpm": p.wpm, "baseline_wpm": baseline_wpm, "duration_s": seg_dur},
+                    )
+                )
+            if (
+                seg_dur >= WPM_EVENT_MIN_SEGMENT_S
+                and p.wpm > 0
+                and p.wpm < WPM_SLOW_CUTOFF
+            ):
+                snippet = _transcript_around(session, p.t_start + seg_dur / 2)
+                events.append(
+                    SemanticEvent(
+                        kind=EventKind.WPM_SLOW,
+                        t_start=p.t_start,
+                        t_end=p.t_end,
+                        text=f"말 속도 느림: 분당 {p.wpm:.0f}어절",
+                        transcript_snippet=snippet,
+                        metrics={"wpm": p.wpm, "cutoff_wpm": WPM_SLOW_CUTOFF, "duration_s": seg_dur},
                     )
                 )
             if p.pause_seconds >= LONG_PAUSE_S:
@@ -143,15 +189,24 @@ def derive_events(session: Session) -> List[SemanticEvent]:
                         metrics={"pause_s": p.pause_seconds},
                     )
                 )
-            window_minutes = max(0.001, (p.t_end - p.t_start) / 60.0)
-            if (p.filler_count / window_minutes) >= FILLER_BURST_PER_MIN:
+            window_minutes = max(FILLER_BURST_MIN_WINDOW_MIN, seg_dur / 60.0)
+            if (
+                p.filler_count >= FILLER_BURST_MIN_COUNT
+                and (p.filler_count / window_minutes) >= FILLER_BURST_PER_MIN
+            ):
+                snippet = _transcript_around(session, p.t_start + seg_dur / 2)
                 events.append(
                     SemanticEvent(
                         kind=EventKind.FILLER_BURST,
                         t_start=p.t_start,
                         t_end=p.t_end,
-                        text=f"filler 폭주: {p.filler_count}개 ({', '.join(p.filler_terms)})",
-                        metrics={"filler_count": float(p.filler_count)},
+                        text=f"필러 집중: {p.filler_count}개 ({', '.join(p.filler_terms)})",
+                        transcript_snippet=snippet,
+                        metrics={
+                            "filler_count": float(p.filler_count),
+                            "filler_per_min": p.filler_count / window_minutes,
+                            "duration_s": seg_dur,
+                        },
                     )
                 )
 
@@ -166,11 +221,14 @@ def derive_events(session: Session) -> List[SemanticEvent]:
     events.extend(_hand_freeze_events(session))
     events.extend(_gesture_excessive_events(session))
     # Domain-expansion detectors — neutral here; per-scenario rubric YAML decides
-    # how heavily each one weighs (e.g., LOW_SMILE = blunder in dating, neutral in vocal).
+    # how heavily each one weighs. Low-smile is only emitted for warmth-driven
+    # contexts; in presentations it created confusing "무미소" moments even when
+    # expression diversity was high.
     events.extend(_face_touch_events(session))
     events.extend(_hand_fidget_events(session))
     events.extend(_motion_hesitation_events(session))
-    events.extend(_low_smile_events(session))
+    if session.scenario in SMILE_SIGNAL_SCENARIOS:
+        events.extend(_low_smile_events(session))
     events.extend(_gaze_wander_events(session))
 
     # --- Audio silence (from browser RMS detector OR Phase 2 prosody) ---
@@ -191,9 +249,9 @@ def derive_events(session: Session) -> List[SemanticEvent]:
             t_start=0.0,
             t_end=session.duration_s,
             text=(
-                f"세션 평균 WPM {aggs.avg_wpm:.0f}, "
-                f"filler {aggs.filler_per_minute:.1f}회/분, "
-                f"시선 중앙 유지율 {aggs.gaze_central_fraction*100:.0f}%, "
+                f"세션 평균 말 속도 분당 {aggs.avg_wpm:.0f}어절, "
+                f"필러 {aggs.filler_per_minute:.1f}회/분, "
+                f"정면을 바라본 비율 {aggs.gaze_central_fraction*100:.0f}%, "
                 f"표정 다양성 {aggs.expression_diversity_mean:.2f}"
             ),
             metrics={
@@ -206,20 +264,19 @@ def derive_events(session: Session) -> List[SemanticEvent]:
         )
     )
 
-    # ── DIAGNOSTIC: tally per-kind emissions so we can see exactly which detectors
-    # fired vs. silently produced nothing.
-    from collections import Counter
-    tally = Counter(e.kind.value for e in events)
-    print(f"[derive] events emitted: {dict(tally)}", flush=True)
+    if DEBUG_EVENTS:
+        from collections import Counter
+        tally = Counter(e.kind.value for e in events)
+        print(f"[derive] events emitted: {dict(tally)}", flush=True)
 
     return events
 
 
 def _transcript_around(session: Session, t: float, span_s: float = 4.0) -> str:
-    """Return last few words spoken just before time t."""
+    """Return nearby STT text for grounding verbal events."""
     snippets = []
     for seg in session.stt_segments:
-        if seg.t_end <= t and seg.t_end >= t - span_s:
+        if seg.t_end >= t - span_s and seg.t_start <= t + span_s:
             snippets.append(seg.text.strip())
     return " ".join(snippets).strip()
 
@@ -752,8 +809,18 @@ def compute_aggregates(session: Session) -> SessionAggregates:
     vfs = session.vision_frames
     pfs = session.prosody_frames
     duration_min = max(0.001, session.duration_s / 60.0)
+    word_count = sum(getattr(p, "word_count", 0) for p in pfs)
+    if word_count > 0:
+        avg_wpm = word_count / duration_min
+    else:
+        weighted_seconds = sum(max(0.0, p.t_end - p.t_start) for p in pfs if p.wpm > 0)
+        avg_wpm = (
+            sum(p.wpm * max(0.0, p.t_end - p.t_start) for p in pfs if p.wpm > 0)
+            / weighted_seconds
+            if weighted_seconds > 0 else 0.0
+        )
     return SessionAggregates(
-        avg_wpm=_avg([p.wpm for p in pfs if p.wpm > 0]),
+        avg_wpm=avg_wpm,
         filler_per_minute=sum(p.filler_count for p in pfs) / duration_min,
         gaze_central_fraction=_avg([f.gaze_fixation_ratio for f in vfs]),
         posture_sway_mean=_avg([f.posture_sway for f in vfs]),
@@ -776,18 +843,20 @@ def build_bundle(session: Session) -> SessionBundle:
             words.append(WordSpan(t_start=w.t_start, t_end=w.t_end, word=w.word))
     full_transcript = " ".join(seg.text.strip() for seg in session.stt_segments if seg.is_final).strip()
 
+    events = derive_events(session)
     axes = compute_axis_accuracies(session)
-    moments = annotate_moments(session)
+    moments = annotate_moments(session, events=events)
     buckets = compute_quality_buckets(moments)
     timeline = compute_score_timeline(session, moments)
 
     return SessionBundle(
         session_id=session.session_id,
         scenario=session.scenario,
+        focus_goals=list(session.focus_goals),
         duration_s=session.duration_s,
         full_transcript=full_transcript,
         words=words,
-        events=derive_events(session),
+        events=events,
         aggregates=compute_aggregates(session),
         accuracy_overall=compute_overall_accuracy(axes),
         accuracy_per_axis=axes,

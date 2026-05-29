@@ -33,6 +33,15 @@ function resolveScenario(): string {
   return params.get('scenario') || params.get('type') || 'presentation';
 }
 
+function resolveFocusGoals(): string[] {
+  const params = new URLSearchParams(location.search);
+  const goal = params.get('goal') || '';
+  return goal
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 // Common virtual-camera label fragments. We avoid these on first try because
 // they often output a privacy filter or static image, not the actual user.
 const VIRTUAL_HINTS = ['virtual', 'mirametrix', 'obs', 'snap', 'nvidia broadcast', 'xsplit', 'manycam'];
@@ -197,8 +206,9 @@ async function bootstrap() {
     // Scenario picks the coach rubric: presentation | interview | vocal | ...
     // (see services/coach/rubrics/*.yaml). Default 'presentation' if no URL param.
     const scenario = resolveScenario();
+    const focusGoals = resolveFocusGoals();
     resetSignalState();
-    await aggregator.start(sessionId, scenario);
+    await aggregator.start(sessionId, scenario, focusGoals);
     recorder.start(stream); // record the user's video+audio directly (avatar canvas is hidden)
     silenceDetector = new SilenceDetector(stream);
     silenceDetector.start();
@@ -405,9 +415,11 @@ async function bootstrap() {
       btnStart.disabled = true;
       liveDetect = false; // suspend live tick — upload flow drives the landmarker
       const scenario = resolveScenario();
+      const focusGoals = resolveFocusGoals();
       try {
         await analyzeUploadedVideo(file, {
           scenario,
+          focusGoals,
           landmarkers,
           aggregator,
           setStatus,

@@ -46,6 +46,15 @@ export const TrainingPrescriptionSchema = z.object({
 });
 export type TrainingPrescription = z.infer<typeof TrainingPrescriptionSchema>;
 
+export const TranscriptCheckSchema = z.object({
+  phrase: z.string(),
+  suggestion: z.string().nullable().optional(),
+  reason: z.string(),
+  t_start: z.number().nullable().optional(),
+  t_end: z.number().nullable().optional(),
+});
+export type TranscriptCheck = z.infer<typeof TranscriptCheckSchema>;
+
 export const ComprehensiveReportSchema = z.object({
   session_id: z.string(),
   rubric: RubricSchema,
@@ -55,5 +64,6 @@ export const ComprehensiveReportSchema = z.object({
   improvements: z.array(FindingSchema),
   training_prescriptions: z.array(TrainingPrescriptionSchema).default([]),
   evidence_clips: z.array(EvidenceClipSchema),
+  transcript_checks: z.array(TranscriptCheckSchema).default([]),
 });
 export type ComprehensiveReport = z.infer<typeof ComprehensiveReportSchema>;

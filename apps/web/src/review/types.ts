@@ -79,6 +79,14 @@ export interface SubtitleSegment {
   words: SubtitleWord[];
 }
 
+export interface TranscriptCheck {
+  phrase: string;
+  suggestion?: string | null;
+  reason: string;
+  t_start?: number | null;
+  t_end?: number | null;
+}
+
 export interface ComprehensiveReport {
   session_id: string;
   rubric: Rubric;
@@ -94,4 +102,5 @@ export interface ComprehensiveReport {
   annotated_moments: AnnotatedMoment[];
   score_timeline: TimelineSample[];
   subtitle_segments?: SubtitleSegment[];
+  transcript_checks?: TranscriptCheck[];
 }
