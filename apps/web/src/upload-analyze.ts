@@ -1,28 +1,11 @@
-// Uploaded-video analysis flow.
-//
-// Goal: deliver the SAME evaluation depth as the live-recording flow when the
-// user uploads a pre-recorded video instead of recording in the browser.
-//
-// Approach: replay the uploaded video through the SAME MediaPipe pipeline that
-// the live flow uses, then upload the original file to /analyze for STT + prosody.
-// The video itself never leaves the browser for vision (only audio is sent to
-// the server, same privacy posture as the live flow).
-//
-// Pump strategy: play the video silently at PLAYBACK_RATE × realtime, sample
-// frames at SAMPLE_INTERVAL_MS wall-clock cadence (≈ 5fps in video time at
-// PLAYBACK_RATE=1, 10fps coverage at PLAYBACK_RATE=2, etc.). MediaPipe's
-// detectForVideo is synchronous (~30-50ms on CPU); the sleep between samples
-// gives the event loop air and matches the live tick's 5fps signal cadence.
-
 import { detect, type Landmarkers } from './mediapipe/landmarkers';
 import { computeVisionFrame, resetSignalState } from './signals/compute';
 import type { AggregatorClient, AudioAnalysisResult } from './ws/client';
 import { uploadForAnalysis } from './audio-upload';
 import type { ComprehensiveReport } from './review/types';
-import { completeReviewNavigation } from './review/complete';
 
-const SAMPLE_INTERVAL_MS = 200; // 5 samples / sec wall-clock
-const PLAYBACK_RATE = 2;        // 2× realtime keeps a 5min upload to ~2.5min vision
+const SAMPLE_INTERVAL_MS = 200;
+const PLAYBACK_RATE = 2;
 const META_TIMEOUT_MS = 15000;
 const SEEK_FALLBACK_TIMEOUT_MS = 3000;
 
@@ -32,24 +15,21 @@ export interface UploadAnalyzeContext {
   landmarkers: Landmarkers;
   aggregator: AggregatorClient;
   setStatus: (msg: string) => void;
+  onPhaseChange?: (phase: 'video' | 'audio' | 'content' | 'done') => void;
 }
 
 export async function analyzeUploadedVideo(
   file: File,
   ctx: UploadAnalyzeContext,
-): Promise<void> {
+): Promise<ComprehensiveReport | null> {
   const url = URL.createObjectURL(file);
 
-  // Hidden video element used for frame sampling. Separate from the visible
-  // review video so playback rate / seeking here doesn't disturb the user's view.
   const probe = document.createElement('video');
   probe.src = url;
-  probe.muted = true;             // no audio playback during vision sampling
+  probe.muted = true;
   probe.preload = 'auto';
   probe.playsInline = true;
   probe.crossOrigin = 'anonymous';
-  // We need the element rendering for MediaPipe to read frame pixels — hidden
-  // via visibility, not display:none (which can stop the rendering pipeline).
   probe.style.position = 'fixed';
   probe.style.left = '-99999px';
   probe.style.top = '0';
@@ -58,6 +38,7 @@ export async function analyzeUploadedVideo(
   document.body.appendChild(probe);
 
   try {
+    ctx.onPhaseChange?.('video');
     ctx.setStatus('영상 로딩 중…');
     await waitFor(probe, META_TIMEOUT_MS);
     const duration = isFinite(probe.duration) && probe.duration > 0 ? probe.duration : 0;
@@ -65,12 +46,10 @@ export async function analyzeUploadedVideo(
       throw new Error('영상 길이를 알 수 없습니다 (재인코딩이 필요할 수 있어요)');
     }
 
-    // Start an aggregator session keyed to this upload, using the chosen scenario.
     const sessionId = `upload_${Date.now()}`;
     resetSignalState();
     await ctx.aggregator.start(sessionId, ctx.scenario, ctx.focusGoals);
 
-    // ── Vision: play + sample loop ──
     probe.playbackRate = PLAYBACK_RATE;
     await probe.play();
 
@@ -78,14 +57,6 @@ export async function analyzeUploadedVideo(
     let lastReportedPct = -1;
     while (!probe.ended && !probe.paused) {
       const t = probe.currentTime;
-      // MediaPipe needs MONOTONIC ms timestamps across the WHOLE landmarker
-      // lifetime — and the live tick that ran during the camera preview has
-      // already fed it ts ≈ performance.now() (millions). Reusing
-      // video.currentTime * 1000 here would start at 0, MP would reject every
-      // frame as "non-monotonic", try/catch would swallow the error, and
-      // aggregator would see "vision_frames=0". Solution: use wall-clock for
-      // MP ordering. The VisionFrame's `t` stays as video time so the moments
-      // align to playback position.
       const ts = Math.max(Math.floor(performance.now()), lastTs + 1);
       lastTs = ts;
       try {
@@ -103,8 +74,8 @@ export async function analyzeUploadedVideo(
       await sleep(SAMPLE_INTERVAL_MS);
     }
 
-    // ── Audio: ship the original file to /analyze (STT + prosody) ──
-    ctx.setStatus('음성 분석 중… (STT + 운율, 최대 ~1분)');
+    ctx.onPhaseChange?.('audio');
+    ctx.setStatus('음성 분석 중… (Whisper + 운율, 최대 ~1분)');
     let audioResult: AudioAnalysisResult | null = null;
     try {
       audioResult = await uploadForAnalysis(file, sessionId, file.name);
@@ -113,28 +84,29 @@ export async function analyzeUploadedVideo(
       console.warn('[upload] /analyze failed — proceeding without server audio', e);
     }
 
-    // ── Bundle + LLM ──
+    ctx.onPhaseChange?.('content');
     ctx.setStatus('평가 생성 중…');
     const result = await ctx.aggregator.end(audioResult);
     ctx.aggregator.close();
 
     if (result && (result as { report?: ComprehensiveReport }).report) {
       const report = (result as { report: ComprehensiveReport }).report;
-      console.log('[upload] coach result', result);
-      await completeReviewNavigation({
-        report,
-        videoBlob: file,
-        videoName: file.name,
-        videoType: file.type,
-        source: 'upload',
-        setStatus: ctx.setStatus,
-      });
-    } else {
-      ctx.setStatus('평가 실패 — 콘솔 확인');
-      console.warn('[upload] coach result missing or malformed', result);
+      ctx.onPhaseChange?.('done');
+      ctx.setStatus(
+        `평가 완료 — 종합 ${report.accuracy_overall?.toFixed(1) ?? '?'}점, 순간 ${report.annotated_moments?.length ?? 0}개`,
+      );
+      return report;
     }
+
+    ctx.setStatus('평가 실패 — 콘솔 확인');
+    console.warn('[upload] coach result missing or malformed', result);
+    return null;
   } finally {
-    try { probe.pause(); } catch { /* ignore */ }
+    try {
+      probe.pause();
+    } catch {
+      // ignore
+    }
     URL.revokeObjectURL(url);
     probe.remove();
   }
@@ -169,6 +141,4 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Suppress unused-export warning for SEEK_FALLBACK_TIMEOUT_MS if we don't need
-// seek-based sampling at all. Kept in source for the alternate-pump strategy.
 void SEEK_FALLBACK_TIMEOUT_MS;

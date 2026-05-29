@@ -7,14 +7,11 @@ import {
 } from './avatar/retarget';
 import { resolveAvatarUrl } from './avatar/registry';
 import { createLandmarkers, detect } from './mediapipe/landmarkers';
-import { AvatarRecorder, type AvatarRecording } from './recorder/canvas-record';
+import { AvatarRecorder } from './recorder/canvas-record';
 import { computeVisionFrame, resetSignalState } from './signals/compute';
 import { SilenceDetector } from './signals/silence';
-import { createAggregatorClient } from './ws/client';
-import type { ComprehensiveReport } from './review/types';
-import { uploadForAnalysis } from './audio-upload';
-import { analyzeUploadedVideo } from './upload-analyze';
-import { completeReviewNavigation } from './review/complete';
+import { createAggregatorClient, createHudClient, type LiveHudResponse } from './ws/client';
+import { savePendingMedia, setPendingAnalysis } from './session-store';
 
 const status = document.getElementById('status') as HTMLDivElement;
 const video = document.getElementById('cam') as HTMLVideoElement;
@@ -25,13 +22,33 @@ const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
 const btnAnalyze = document.getElementById('btn-analyze') as HTMLButtonElement;
 const recorded = document.getElementById('recorded') as HTMLVideoElement;
-const timerEl = document.querySelector('.timer') as HTMLDivElement;
-const recordBadge = document.querySelector('.record-badge') as HTMLDivElement;
+const timerEl = document.querySelector('.timer') as HTMLDivElement | null;
+const recordBadge = document.querySelector('.record-badge') as HTMLDivElement | null;
 
-function resolveScenario(): string {
-  const params = new URLSearchParams(location.search);
-  return params.get('scenario') || params.get('type') || 'presentation';
-}
+const params = new URLSearchParams(location.search);
+const projectName = params.get('project') || '오늘의 말하기 연습';
+const typeName = params.get('type') || 'free';
+const goals = (params.get('goal') || '말 속도')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const hudCards = {
+  wpm: document.querySelector<HTMLElement>('[data-hud-card="wpm"]'),
+  filler: document.querySelector<HTMLElement>('[data-hud-card="filler"]'),
+  silence: document.querySelector<HTMLElement>('[data-hud-card="silence"]'),
+};
+
+const SCENARIO_MAP: Record<string, string> = {
+  presentation: 'presentation',
+  interview: 'interview',
+  negotiation: 'presentation',
+  persuasion: 'presentation',
+  daily: 'casual',
+  phone: 'customer_service',
+  online: 'presentation',
+  free: 'presentation',
+};
 
 function resolveFocusGoals(): string[] {
   const params = new URLSearchParams(location.search);
@@ -42,8 +59,6 @@ function resolveFocusGoals(): string[] {
     .filter(Boolean);
 }
 
-// Common virtual-camera label fragments. We avoid these on first try because
-// they often output a privacy filter or static image, not the actual user.
 const VIRTUAL_HINTS = ['virtual', 'mirametrix', 'obs', 'snap', 'nvidia broadcast', 'xsplit', 'manycam'];
 
 function isLikelyVirtual(label: string): boolean {
@@ -52,7 +67,6 @@ function isLikelyVirtual(label: string): boolean {
 }
 
 async function acquireStream(preferredDeviceId?: string): Promise<MediaStream> {
-  // First call: ask for permission with default device so labels become readable.
   if (!preferredDeviceId) {
     let scratch: MediaStream | null = null;
     try {
@@ -60,7 +74,6 @@ async function acquireStream(preferredDeviceId?: string): Promise<MediaStream> {
     } catch (e) {
       throw e;
     }
-    // Enumerate to pick a non-virtual camera if the default is virtual.
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cams = devices.filter((d) => d.kind === 'videoinput');
     console.log('[practice] cameras:', cams.map((c) => `${c.label}${isLikelyVirtual(c.label) ? ' [VIRTUAL]' : ''}`));
@@ -74,16 +87,14 @@ async function acquireStream(preferredDeviceId?: string): Promise<MediaStream> {
         scratch.getTracks().forEach((t) => t.stop());
         camSelect.value = real.deviceId;
         return acquireStream(real.deviceId);
-      } else {
-        console.warn('[practice] only virtual cameras found — proceeding with virtual; preview will likely be blank');
       }
+      console.warn('[practice] only virtual cameras found — proceeding with virtual; preview will likely be blank');
     } else {
       camSelect.value = cams.find((c) => c.label === currentLabel)?.deviceId ?? '';
     }
     return scratch;
   }
 
-  // Targeted re-acquire with a specific device.
   return navigator.mediaDevices.getUserMedia({
     video: { deviceId: { exact: preferredDeviceId }, width: 640, height: 480 },
     audio: { echoCancellation: true, noiseSuppression: true },
@@ -113,10 +124,11 @@ function formatClock(totalSeconds: number): string {
 }
 
 function setTimer(seconds: number): void {
-  timerEl.textContent = formatClock(seconds);
+  if (timerEl) timerEl.textContent = formatClock(seconds);
 }
 
 function setRecordBadge(label: string, state: 'idle' | 'recording' | 'done' = 'idle'): void {
+  if (!recordBadge) return;
   recordBadge.dataset.state = state;
   const dot = recordBadge.querySelector('span');
   recordBadge.textContent = '';
@@ -124,9 +136,55 @@ function setRecordBadge(label: string, state: 'idle' | 'recording' | 'done' = 'i
   recordBadge.append(label);
 }
 
-function activePracticeMode(): 'live' | 'upload' {
-  const mode = document.querySelector('.tab.is-active')?.getAttribute('data-mode');
-  return mode === 'upload' ? 'upload' : 'live';
+function setHudCard(
+  key: keyof typeof hudCards,
+  value: string,
+  meterPct: number,
+  tone: 'idle' | 'ok' | 'warn' | 'critical' = 'idle',
+) {
+  const card = hudCards[key];
+  if (!card) return;
+  const valueEl = card.querySelector<HTMLElement>('[data-hud-value]');
+  const meterEl = card.querySelector<HTMLElement>('.meter i');
+  card.classList.remove('is-muted', 'is-ok', 'is-warn', 'is-critical');
+  card.classList.add(
+    tone === 'ok' ? 'is-ok' : tone === 'warn' ? 'is-warn' : tone === 'critical' ? 'is-critical' : 'is-muted',
+  );
+  if (valueEl) valueEl.textContent = value;
+  if (meterEl) meterEl.style.width = `${Math.max(0, Math.min(100, meterPct))}%`;
+}
+
+function resetHudCards() {
+  setHudCard('wpm', '—', 0, 'idle');
+  setHudCard('filler', '—', 0, 'idle');
+  setHudCard('silence', '—', 0, 'idle');
+}
+
+function parseHudNumber(text: string): number | null {
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
+}
+
+function syncHudFromResponse(payload: LiveHudResponse, recording: boolean) {
+  if (!recording) return;
+  const byKind = new Map(payload.signals.map((signal) => [signal.kind, signal]));
+  const wpmSignal = byKind.get('wpm_very_high') ?? byKind.get('wpm_high');
+  if (wpmSignal) {
+    const wpm = parseHudNumber(wpmSignal.text) ?? 0;
+    const tone = wpmSignal.level === 'critical' ? 'critical' : 'warn';
+    setHudCard('wpm', `${Math.round(wpm)} WPM`, Math.min(100, (wpm / 240) * 100), tone);
+  } else {
+    setHudCard('wpm', '안정적', 42, 'ok');
+  }
+
+  const fillerSignal = byKind.get('filler_burst');
+  if (fillerSignal) {
+    const count = parseHudNumber(fillerSignal.text) ?? 0;
+    const tone = fillerSignal.level === 'critical' ? 'critical' : 'warn';
+    setHudCard('filler', `${Math.round(count)}회`, Math.min(100, count * 20), tone);
+  } else {
+    setHudCard('filler', '낮음', 18, 'ok');
+  }
 }
 
 async function bootstrap() {
@@ -173,43 +231,36 @@ async function bootstrap() {
 
   setStatus('준비됨 — 거울처럼 따라옵니다. 녹화를 시작하면 webm 저장됩니다.');
   btnStart.disabled = false;
-  btnStart.textContent = '녹화 시작';
   setTimer(0);
   setRecordBadge('대기 중');
+  resetHudCards();
 
   const recorder = new AvatarRecorder();
   const aggregator = createAggregatorClient();
+  const hudClient = createHudClient();
   let recording = false;
   let recordingStartTSec = 0;
   let lastSignalSendT = 0;
   let lastProsodySendT = 0;
   let silenceDetector: SilenceDetector | null = null;
-  let pendingLiveRecording: AvatarRecording | null = null;
-  // Outer scope so btnStop can pass it into /analyze (associates the audio
-  // analysis with the recording session).
   let sessionId = '';
-  // Pauses the live tick's MediaPipe + avatar pipeline while the uploaded-video
-  // flow drives the same landmarkers on its hidden probe video. Two sources
-  // calling detectForVideo with interleaved timestamps would break MP's
-  // monotonicity guard. Set false to suspend live detect, true to resume.
-  let liveDetect = true;
+  const scenario = SCENARIO_MAP[typeName] || 'presentation';
+
+  await hudClient.connect((payload) => {
+    syncHudFromResponse(payload, recording);
+  });
 
   btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
     btnAnalyze.disabled = true;
-    btnStart.textContent = '녹화 중';
-    pendingLiveRecording = null;
     setTimer(0);
     setRecordBadge('녹화 중', 'recording');
     setStatus('세션 시작 중…');
     sessionId = `sess_${Date.now()}`;
-    // Scenario picks the coach rubric: presentation | interview | vocal | ...
-    // (see services/coach/rubrics/*.yaml). Default 'presentation' if no URL param.
-    const scenario = resolveScenario();
     const focusGoals = resolveFocusGoals();
     resetSignalState();
     await aggregator.start(sessionId, scenario, focusGoals);
-    recorder.start(stream); // record the user's video+audio directly (avatar canvas is hidden)
+    recorder.start(stream);
     silenceDetector = new SilenceDetector(stream);
     silenceDetector.start();
     recording = true;
@@ -217,6 +268,7 @@ async function bootstrap() {
     lastSignalSendT = 0;
     lastProsodySendT = 0;
     btnStop.disabled = false;
+    resetHudCards();
     setStatus(`녹화 중… (세션 ${sessionId})`);
   });
 
@@ -228,17 +280,74 @@ async function bootstrap() {
       silenceDetector = null;
     }
     const rec = await recorder.stop();
-    pendingLiveRecording = rec;
     recorded.src = rec.url;
-    btnStart.disabled = false;
-    btnStart.textContent = '다시 녹화';
-    btnAnalyze.disabled = false;
     setTimer(rec.durationMs / 1000);
     setRecordBadge('녹화 완료', 'done');
-    setStatus(`녹화 완료 — AI 코칭 시작을 누르면 분석합니다. (${(rec.durationMs / 1000).toFixed(1)}초)`);
+
+    try {
+      setStatus('코칭 화면으로 이동 중…');
+      const mediaId = await savePendingMedia(rec.blob, `${sessionId}.webm`, rec.blob.type || 'video/webm');
+      setPendingAnalysis({
+        sessionId,
+        project: projectName,
+        goal: goals,
+        type: typeName,
+        source: 'live',
+        createdAt: new Date().toISOString(),
+        mediaId,
+        filename: `${sessionId}.webm`,
+        mimeType: rec.blob.type || 'video/webm',
+        scenario,
+      });
+      const next = new URL('loading.html', location.href);
+      next.searchParams.set('session', sessionId);
+      next.searchParams.set('source', 'live');
+      next.searchParams.set('project', projectName);
+      next.searchParams.set('goal', goals.join(', '));
+      next.searchParams.set('type', typeName);
+      location.href = next.toString();
+    } catch (e) {
+      console.error('[practice] failed to hand off live analysis', e);
+      btnStart.disabled = false;
+      btnStop.disabled = false;
+      setStatus('분석 준비에 실패했어요. 다시 시도해주세요.');
+    }
   });
 
-  // Animation loop with diagnostics
+  btnAnalyze.addEventListener('click', async () => {
+    const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
+    const file = uploadInput?.files?.[0];
+    if (!file) return;
+    btnAnalyze.disabled = true;
+    try {
+      const sessionKey = `upload_${Date.now()}`;
+      const mediaId = await savePendingMedia(file, file.name, file.type || 'video/mp4');
+      setPendingAnalysis({
+        sessionId: sessionKey,
+        project: projectName,
+        goal: goals,
+        type: typeName,
+        source: 'upload',
+        createdAt: new Date().toISOString(),
+        mediaId,
+        filename: file.name,
+        mimeType: file.type || 'video/mp4',
+        scenario,
+      });
+      const next = new URL('loading.html', location.href);
+      next.searchParams.set('session', sessionKey);
+      next.searchParams.set('source', 'upload');
+      next.searchParams.set('project', projectName);
+      next.searchParams.set('goal', goals.join(', '));
+      next.searchParams.set('type', typeName);
+      location.href = next.toString();
+    } catch (e) {
+      console.error('[practice] failed to queue uploaded analysis', e);
+      btnAnalyze.disabled = false;
+      setStatus('업로드 영상을 준비하지 못했어요. 다시 시도해주세요.');
+    }
+  });
+
   let lastT = performance.now();
   let frames = 0;
   let lastFpsT = performance.now();
@@ -248,9 +357,8 @@ async function bootstrap() {
   let handCount = 0;
   let detectError: string | null = null;
   let lastTs = -1;
-  let pixelMean = -1; // sampled brightness of current camera frame, 0..255
+  let pixelMean = -1;
 
-  // Off-screen canvas for sampling video pixel content (verifies frames are non-black).
   const probe = document.createElement('canvas');
   probe.width = 64;
   probe.height = 48;
@@ -271,12 +379,8 @@ async function bootstrap() {
     const ready = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    if (recording) {
-      setTimer(now / 1000 - recordingStartTSec);
-    }
 
-    if (ready && vw > 0 && vh > 0 && liveDetect) {
-      // Sample frame brightness every ~10 frames to verify camera isn't black.
+    if (ready && vw > 0 && vh > 0) {
       if (probeFrame++ % 10 === 0) {
         probeCtx.drawImage(video, 0, 0, probe.width, probe.height);
         const data = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
@@ -287,8 +391,6 @@ async function bootstrap() {
         pixelMean = sum / (data.length / 4) / 3;
       }
 
-      // MediaPipe requires strictly monotonic timestamps. Skipped entirely when
-      // liveDetect=false (upload-analyze takes over the landmarker).
       const ts = Math.max(Math.floor(now), lastTs + 1);
       lastTs = ts;
       try {
@@ -304,15 +406,14 @@ async function bootstrap() {
           applyFaceToFallback(stage.fallback, face);
         }
 
-        // Push 5fps vision signals to aggregator while recording.
         if (recording) {
           const sessionT = now / 1000 - recordingStartTSec;
+          setTimer(sessionT);
           if (sessionT - lastSignalSendT >= 0.2) {
             const frame = computeVisionFrame(sessionT, face, pose, hand);
             aggregator.sendVision(frame);
             lastSignalSendT = sessionT;
           }
-          // Push prosody (silence) frame every ~1s.
           if (silenceDetector && sessionT - lastProsodySendT >= 1.0) {
             const { silenceSeconds, rmsMean } = silenceDetector.snapshot();
             aggregator.sendProsody({
@@ -321,6 +422,13 @@ async function bootstrap() {
               silence_seconds: silenceSeconds,
               rms_mean: rmsMean,
             });
+            const tone = silenceSeconds >= 4 ? 'warn' : silenceSeconds >= 2 ? 'ok' : 'idle';
+            setHudCard(
+              'silence',
+              silenceSeconds > 0.1 ? `${silenceSeconds.toFixed(1)}초` : '짧음',
+              Math.min(100, (silenceSeconds / 4) * 100),
+              tone,
+            );
             silenceDetector.resetWindow();
             lastProsodySendT = sessionT;
           }
@@ -336,7 +444,6 @@ async function bootstrap() {
       (detectError ? `\nERR ${detectError}` : '');
     debug.textContent = debugLine;
     if (now - lastFpsT < 50) {
-      // ~once per second, dump to console too
       console.log('[debug]', debugLine.replace(/\n/g, ' | '));
     }
 
@@ -345,7 +452,6 @@ async function bootstrap() {
   };
   requestAnimationFrame(tick);
 
-  // Beforeunload guard: prevent accidental nav while recording
   window.addEventListener('beforeunload', (e) => {
     if (recording) {
       e.preventDefault();
@@ -353,90 +459,10 @@ async function bootstrap() {
     }
   });
 
-  // ── AI coaching flow ──
-  // Live mode: analyze the just-recorded webm after the user clicks AI coaching.
-  // Upload mode: replay the selected video through the same vision/audio pipeline.
-  const uploadInput = document.getElementById('upload-file') as HTMLInputElement | null;
-  if (btnAnalyze && uploadInput) {
-    btnAnalyze.addEventListener('click', async (ev) => {
-      // The inline JS in practice.html still navigates to loading.html — prevent
-      // that so our handler can run instead. (We also clear that handler in the
-      // HTML, but defense-in-depth is fine.)
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      const mode = activePracticeMode();
-      const file = uploadInput.files?.[0];
-
-      if (mode === 'live') {
-        if (!pendingLiveRecording || !sessionId) {
-          setStatus('먼저 녹화를 완료해 주세요');
-          return;
-        }
-        btnAnalyze.disabled = true;
-        btnStart.disabled = true;
-        btnStop.disabled = true;
-        setStatus(`음성 분석 중… (STT + 운율, 최대 ~1분)`);
-        let audioResult: Awaited<ReturnType<typeof uploadForAnalysis>> | null = null;
-        try {
-          audioResult = await uploadForAnalysis(pendingLiveRecording.blob, sessionId);
-          console.log('[audio] analyze result', audioResult);
-        } catch (e) {
-          console.warn('[audio] /analyze failed — bundling without server-side audio', e);
-        }
-
-        setStatus(`평가 생성 중…`);
-        const result = await aggregator.end(audioResult);
-        aggregator.close();
-        if (result && (result as { report?: ComprehensiveReport }).report) {
-          const report = (result as { report: ComprehensiveReport }).report;
-          console.log('[coach] result', result);
-          await completeReviewNavigation({
-            report,
-            videoBlob: pendingLiveRecording.blob,
-            videoType: pendingLiveRecording.blob.type,
-            source: 'live',
-            setStatus,
-          });
-          return;
-        } else {
-          console.warn('[coach] result missing or malformed', result);
-          setStatus('평가 실패 — 콘솔 확인');
-          btnAnalyze.disabled = false;
-          btnStart.disabled = false;
-        }
-        return;
-      }
-
-      if (!file) {
-        setStatus('영상 파일을 먼저 선택해 주세요');
-        return;
-      }
-      btnAnalyze.disabled = true;
-      btnStart.disabled = true;
-      liveDetect = false; // suspend live tick — upload flow drives the landmarker
-      const scenario = resolveScenario();
-      const focusGoals = resolveFocusGoals();
-      try {
-        await analyzeUploadedVideo(file, {
-          scenario,
-          focusGoals,
-          landmarkers,
-          aggregator,
-          setStatus,
-        });
-      } catch (e) {
-        console.error('[upload] flow failed', e);
-        setStatus(`업로드 분석 실패: ${e instanceof Error ? e.message : String(e)}`);
-      } finally {
-        btnAnalyze.disabled = false;
-        // Leave btnStart disabled — user is reviewing the upload result, and the
-        // aggregator session was closed by analyzeUploadedVideo. A fresh page
-        // load is the cleanest path back to a live recording.
-        // liveDetect stays false so the live camera doesn't keep firing MP detect
-        // on top of the review playback.
-      }
-    });
-  }
+  window.addEventListener('pagehide', () => {
+    hudClient.close();
+    aggregator.close();
+  });
 }
 
 bootstrap().catch((err) => {
@@ -454,5 +480,3 @@ bootstrap().catch((err) => {
     setStatus(`초기화 실패: ${err instanceof Error ? err.message : String(err)}`);
   }
 });
-
-// (uploadForAnalysis moved to ./audio-upload.ts — shared with upload-analyze flow.)

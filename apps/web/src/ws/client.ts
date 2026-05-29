@@ -1,7 +1,3 @@
-// Simple aggregator client: opens WS to /ws/signals, sends 5fps vision frames.
-// Resilient to disconnects — drops frames silently when closed (we'd rather lose a frame
-// than crash the practice page mid-session).
-
 import type { VisionFrame } from '../signals/compute';
 
 export interface ProsodyFrame {
@@ -24,13 +20,53 @@ export interface AudioAnalysisResult {
   elapsed_s?: number;
 }
 
+export interface LiveHudSignal {
+  level: 'info' | 'warn' | 'critical';
+  text: string;
+  kind: string;
+}
+
+export interface LiveHudResponse {
+  window_t_start: number;
+  window_t_end: number;
+  signals: LiveHudSignal[];
+}
+
 export interface AggregatorClient {
   start(sessionId: string, scenario?: string, focusGoals?: string[]): Promise<void>;
   sendVision(frame: VisionFrame): void;
   sendProsody(frame: ProsodyFrame): void;
-  /** Optional audio analysis result (from /analyze) gets merged into the bundle. */
   end(audioResult?: AudioAnalysisResult | null): Promise<unknown>;
   close(): void;
+}
+
+export interface HudClient {
+  connect(onMessage: (payload: LiveHudResponse) => void): Promise<void>;
+  close(): void;
+}
+
+export async function finalizeSession(
+  sessionId: string,
+  audioResult?: AudioAnalysisResult | null,
+  httpBase = '',
+): Promise<unknown> {
+  const body: Record<string, unknown> = { session_id: sessionId };
+  if (audioResult) {
+    if (audioResult.stt_segments) body.stt_segments = audioResult.stt_segments;
+    if (audioResult.prosody_frames) body.prosody_frames = audioResult.prosody_frames;
+    if (audioResult.full_transcript) body.full_transcript = audioResult.full_transcript;
+  }
+  try {
+    const r = await fetch(`${httpBase}/session/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch (e) {
+    console.warn('[ws] session/end failed', e);
+    return null;
+  }
 }
 
 export function createAggregatorClient(opts: {
@@ -45,7 +81,6 @@ export function createAggregatorClient(opts: {
   return {
     async start(sid, scenario = 'presentation', focusGoals: string[] = []) {
       sessionId = sid;
-      // 1. POST /session/start (REST) — scenario picks the coach's rubric YAML.
       try {
         const r = await fetch(`${httpBase}/session/start`, {
           method: 'POST',
@@ -58,7 +93,6 @@ export function createAggregatorClient(opts: {
         return;
       }
 
-      // 2. Open WebSocket for signal stream.
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const url = wsBase || `${proto}//${location.host}/ws/signals`;
       ws = new WebSocket(url);
@@ -79,8 +113,8 @@ export function createAggregatorClient(opts: {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       try {
         ws.send(JSON.stringify({ kind: 'vision', data: frame }));
-      } catch (e) {
-        // Silently drop — frame loss is acceptable.
+      } catch {
+        // Drop frame quietly.
       }
     },
 
@@ -88,34 +122,14 @@ export function createAggregatorClient(opts: {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       try {
         ws.send(JSON.stringify({ kind: 'prosody', data: frame }));
-      } catch (e) {
-        // Silently drop.
+      } catch {
+        // Drop frame quietly.
       }
     },
 
     async end(audioResult?: AudioAnalysisResult | null) {
       if (!sessionId) return null;
-      const body: Record<string, unknown> = { session_id: sessionId };
-      // Merge in audio-pipeline /analyze result so aggregator can replace the
-      // browser-side stub prosody with server-side STT + prosody.
-      if (audioResult) {
-        if (audioResult.stt_segments) body.stt_segments = audioResult.stt_segments;
-        if (audioResult.prosody_frames) body.prosody_frames = audioResult.prosody_frames;
-        if (audioResult.full_transcript) body.full_transcript = audioResult.full_transcript;
-      }
-      // /session/end can take a while when audio is included (whisper+librosa)
-      // but we already analyzed before calling this — body is just JSON ship.
-      try {
-        const r = await fetch(`${httpBase}/session/end`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        return await r.json();
-      } catch (e) {
-        console.warn('[ws] session/end failed', e);
-        return null;
-      }
+      return finalizeSession(sessionId, audioResult, httpBase);
     },
 
     close() {
@@ -127,18 +141,65 @@ export function createAggregatorClient(opts: {
   };
 }
 
+export function createHudClient(opts: { wsBase?: string } = {}): HudClient {
+  const wsBase = opts.wsBase ?? defaultHudWsUrl();
+  let ws: WebSocket | null = null;
+  let keepalive: number | null = null;
+
+  return {
+    async connect(onMessage) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = wsBase || `${proto}//${location.host}/ws/hud`;
+      ws = new WebSocket(url);
+      await new Promise<void>((resolve) => {
+        if (!ws) return resolve();
+        ws.onopen = () => {
+          keepalive = window.setInterval(() => {
+            if (ws?.readyState === WebSocket.OPEN) ws.send('ping');
+          }, 15000);
+          resolve();
+        };
+        ws.onerror = () => resolve();
+        ws.onmessage = (event) => {
+          try {
+            onMessage(JSON.parse(event.data) as LiveHudResponse);
+          } catch (error) {
+            console.warn('[hud] parse error', error);
+          }
+        };
+      });
+    },
+
+    close() {
+      if (keepalive) {
+        window.clearInterval(keepalive);
+        keepalive = null;
+      }
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    },
+  };
+}
+
 function defaultAggregatorHttpBase(): string {
-  // Vite dev server proxies /session/* to 8001. The Docker/static app is served
-  // from audio-pipeline on 8000, so it must call aggregator on 8001 directly.
   return location.port === '8000' ? originWithPort('8001') : '';
 }
 
 function defaultAggregatorWsUrl(): string {
-  if (location.port !== '8000') return '';
+  return location.port === '8000' ? wsUrlWithPort('8001', '/ws/signals') : '';
+}
+
+function defaultHudWsUrl(): string {
+  return location.port === '8000' ? wsUrlWithPort('8001', '/ws/hud') : '';
+}
+
+function wsUrlWithPort(port: string, pathname: string): string {
   const url = new URL(location.href);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.port = '8001';
-  url.pathname = '/ws/signals';
+  url.port = port;
+  url.pathname = pathname;
   url.search = '';
   url.hash = '';
   return url.toString();

@@ -1,0 +1,141 @@
+import type { ComprehensiveReport } from './review/types';
+
+const STORAGE_KEY = 'speakup-completed-sessions';
+const PENDING_KEY = 'speakup-pending-analysis';
+const DB_NAME = 'speakup-media';
+const DB_VERSION = 1;
+const STORE_NAME = 'pending-media';
+
+export interface SessionMeta {
+  sessionId: string;
+  project: string;
+  goal: string[];
+  type: string;
+  source: 'live' | 'upload';
+  createdAt: string;
+}
+
+export interface CompletedSession extends SessionMeta {
+  report: ComprehensiveReport;
+}
+
+export interface PendingAnalysis extends SessionMeta {
+  mediaId: string;
+  filename: string;
+  mimeType: string;
+  scenario: string;
+}
+
+interface StoredMedia {
+  id: string;
+  blob: Blob;
+  filename: string;
+  mimeType: string;
+  createdAt: string;
+}
+
+function canUseDomStorage(): boolean {
+  return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+}
+
+function parseJson<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function getCompletedSessions(): CompletedSession[] {
+  if (!canUseDomStorage()) return [];
+  const sessions = parseJson<CompletedSession[]>(localStorage.getItem(STORAGE_KEY), []);
+  return sessions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getCompletedSession(sessionId: string): CompletedSession | null {
+  return getCompletedSessions().find((session) => session.sessionId === sessionId) ?? null;
+}
+
+export function saveCompletedSession(session: CompletedSession): void {
+  if (!canUseDomStorage()) return;
+  const sessions = getCompletedSessions().filter((item) => item.sessionId !== session.sessionId);
+  sessions.unshift(session);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+}
+
+export function getPendingAnalysis(): PendingAnalysis | null {
+  if (!canUseDomStorage()) return null;
+  return parseJson<PendingAnalysis | null>(localStorage.getItem(PENDING_KEY), null);
+}
+
+export function setPendingAnalysis(payload: PendingAnalysis): void {
+  if (!canUseDomStorage()) return;
+  localStorage.setItem(PENDING_KEY, JSON.stringify(payload));
+}
+
+export function clearPendingAnalysis(): void {
+  if (!canUseDomStorage()) return;
+  localStorage.removeItem(PENDING_KEY);
+}
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error ?? new Error('indexedDB open failed'));
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
+async function withStore<T>(
+  mode: IDBTransactionMode,
+  action: (store: IDBObjectStore, resolve: (value: T) => void, reject: (reason?: unknown) => void) => void,
+): Promise<T> {
+  const db = await openDb();
+  return new Promise<T>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, mode);
+    const store = tx.objectStore(STORE_NAME);
+    action(store, resolve, reject);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => reject(tx.error ?? new Error('indexedDB transaction failed'));
+  });
+}
+
+export async function savePendingMedia(blob: Blob, filename: string, mimeType: string): Promise<string> {
+  const id = `media_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const payload: StoredMedia = {
+    id,
+    blob,
+    filename,
+    mimeType,
+    createdAt: new Date().toISOString(),
+  };
+  await withStore<void>('readwrite', (store, resolve, reject) => {
+    const request = store.put(payload);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error ?? new Error('media save failed'));
+  });
+  return id;
+}
+
+export async function loadPendingMedia(mediaId: string): Promise<StoredMedia | null> {
+  return withStore<StoredMedia | null>('readonly', (store, resolve, reject) => {
+    const request = store.get(mediaId);
+    request.onsuccess = () => resolve((request.result as StoredMedia | undefined) ?? null);
+    request.onerror = () => reject(request.error ?? new Error('media load failed'));
+  });
+}
+
+export async function clearPendingMedia(mediaId: string): Promise<void> {
+  await withStore<void>('readwrite', (store, resolve, reject) => {
+    const request = store.delete(mediaId);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error ?? new Error('media delete failed'));
+  });
+}
