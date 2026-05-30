@@ -58,6 +58,24 @@
             <pre id="debug" class="debug"></pre>
           </section>
 
+          <section class="hud-grid" id="live-hud" aria-label="실시간 지표">
+            <div class="hud-card is-muted" data-hud-card="wpm">
+              <span>말 속도</span>
+              <strong data-hud-value>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+            <div class="hud-card is-muted" data-hud-card="filler">
+              <span>필러 표현</span>
+              <strong data-hud-value>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+            <div class="hud-card is-muted" data-hud-card="silence">
+              <span>침묵 구간</span>
+              <strong data-hud-value>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+          </section>
+
           <section class="upload-mode" id="upload-panel" hidden style="display:none;">
             <div class="upload-box" id="dropzone">
               <strong>연습 영상 가져오기</strong>
@@ -110,9 +128,9 @@
           </section>
           <section class="card focus-panel">
             <h2>포커스 현황</h2>
-            <div class="axis-row"><span class="axis-label">언어적</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
-            <div class="axis-row"><span class="axis-label">준언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
-            <div class="axis-row"><span class="axis-label">비언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row" data-live-axis="verbal"><span class="axis-label">언어적</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row" data-live-axis="prosody"><span class="axis-label">준언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row" data-live-axis="nonverbal"><span class="axis-label">비언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
           </section>
         </aside>
       </section>
@@ -172,6 +190,7 @@
       const avatarReviewToggle = document.getElementById('avatar-review-toggle');
       const uploadPanel = document.getElementById('upload-panel');
       const livePanel = document.getElementById('live-panel');
+      const liveHud = document.getElementById('live-hud');
       const liveControls = document.getElementById('live-controls');
       const uploadControls = document.getElementById('upload-controls');
 
@@ -183,6 +202,8 @@
         uploadControls.style.display = isUpload ? '' : 'none';
         livePanel.hidden = isUpload;
         livePanel.style.display = isUpload ? 'none' : '';
+        liveHud.hidden = isUpload;
+        liveHud.style.display = isUpload ? 'none' : '';
         liveControls.hidden = isUpload;
         liveControls.style.display = isUpload ? 'none' : '';
       }

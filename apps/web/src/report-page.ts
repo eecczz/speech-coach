@@ -1,5 +1,6 @@
 import { deriveNextTarget, findPreviousSession, formatTimeShort, getDisplayAxisScores, getTopMoments } from './report-utils';
-import { getCompletedSession, getCompletedSessions } from './session-store';
+import type { AnnotatedMoment } from './review/types';
+import { getCompletedSession, getCompletedSessions, loadPendingMedia } from './session-store';
 
 declare const Chart: any;
 
@@ -14,8 +15,16 @@ const deltaScoreEl = document.getElementById('delta-score') as HTMLElement | nul
 const summaryEl = document.getElementById('ai-summary') as HTMLElement | null;
 const momentsList = document.getElementById('moments-list') as HTMLElement | null;
 const nextGoalsList = document.getElementById('next-goals-list') as HTMLOListElement | null;
-const modalVideo = document.getElementById('modal-video') as HTMLElement | null;
+const modalVideo = document.getElementById('modal-video') as HTMLVideoElement | null;
+const modalVideoEmpty = document.getElementById('modal-video-empty') as HTMLElement | null;
+const modalMomentMeta = document.getElementById('modal-moment-meta') as HTMLElement | null;
 const modalFeedback = document.getElementById('modal-feedback') as HTMLElement | null;
+const modalBack = document.getElementById('modal-back') as HTMLButtonElement | null;
+const modalPlay = document.getElementById('modal-play') as HTMLButtonElement | null;
+const modalForward = document.getElementById('modal-forward') as HTMLButtonElement | null;
+
+let modalVideoUrl: string | null = null;
+let activeMomentTime = 0;
 
 function syncThemeToggle() {
   if (!themeToggle) return;
@@ -39,6 +48,28 @@ document.querySelector('[data-close-modal]')?.addEventListener('click', () => {
   (document.getElementById('video-modal') as HTMLDialogElement | null)?.close();
 });
 
+modalBack?.addEventListener('click', () => seekModalVideo(activeMomentTime - 10));
+modalForward?.addEventListener('click', () => seekModalVideo(activeMomentTime + 10));
+modalPlay?.addEventListener('click', () => {
+  seekModalVideo(activeMomentTime);
+  void modalVideo?.play().catch(() => {});
+});
+
+function seekModalVideo(time: number) {
+  if (!modalVideo || !modalVideo.src) return;
+  const duration = Number.isFinite(modalVideo.duration) ? modalVideo.duration : Number.POSITIVE_INFINITY;
+  modalVideo.currentTime = Math.max(0, Math.min(time, duration));
+}
+
+function formatMomentRange(moment: Pick<AnnotatedMoment, 't' | 'duration_s'>): string {
+  const start = formatTimeShort(moment.t);
+  const duration = typeof moment.duration_s === 'number' && Number.isFinite(moment.duration_s)
+    ? Math.max(0, moment.duration_s)
+    : 0;
+  if (duration <= 0) return start;
+  return `${start}-${formatTimeShort(moment.t + duration)}`;
+}
+
 function setAxisCard(key: 'verbal' | 'prosody' | 'nonverbal', score: number | null, note: string) {
   const card = document.querySelector<HTMLElement>(`[data-axis-card="${key}"]`);
   if (!card) return;
@@ -59,23 +90,56 @@ function renderMoments(session: ReturnType<typeof getCompletedSession>) {
   }
   momentsList.innerHTML = topMoments
     .map(
-      (moment) => `
-        <button type="button" class="moment-card" data-moment-title="${moment.title}" data-moment-comment="${moment.coach_comment ?? ''}">
-          <span>${formatTimeShort(moment.t)}</span>
+      (moment) => {
+        const range = formatMomentRange(moment);
+        return `
+        <button type="button" class="moment-card" data-moment-title="${moment.title}" data-moment-comment="${moment.coach_comment ?? ''}" data-moment-time="${moment.t}" data-moment-range="${range}">
+          <span class="moment-time-range">${range}</span>
           <p>${moment.title}</p>
           <em>${moment.axis}</em>
         </button>
-      `,
+      `;
+      },
     )
     .join('');
 
   momentsList.querySelectorAll<HTMLButtonElement>('[data-moment-title]').forEach((button) => {
     button.addEventListener('click', () => {
-      if (modalVideo) modalVideo.textContent = button.dataset.momentTitle || '선택한 구간';
+      activeMomentTime = Number(button.dataset.momentTime || 0);
+      seekModalVideo(activeMomentTime);
+      if (modalMomentMeta) {
+        const range = button.dataset.momentRange || formatTimeShort(activeMomentTime);
+        modalMomentMeta.textContent = `${range} · ${button.dataset.momentTitle || '주의 구간'}`;
+      }
       if (modalFeedback) modalFeedback.textContent = button.dataset.momentComment || '이 구간의 코칭 코멘트가 여기에 표시됩니다.';
       (document.getElementById('video-modal') as HTMLDialogElement | null)?.showModal();
     });
   });
+}
+
+async function attachModalVideo(session: ReturnType<typeof getCompletedSession>) {
+  if (!modalVideo || !modalVideoEmpty || !session?.mediaId) {
+    setModalVideoAvailable(false);
+    return;
+  }
+  const media = await loadPendingMedia(session.mediaId);
+  if (!media) {
+    setModalVideoAvailable(false);
+    return;
+  }
+  if (modalVideoUrl) URL.revokeObjectURL(modalVideoUrl);
+  modalVideoUrl = URL.createObjectURL(media.blob);
+  modalVideo.src = modalVideoUrl;
+  modalVideo.load();
+  setModalVideoAvailable(true);
+}
+
+function setModalVideoAvailable(available: boolean) {
+  if (modalVideo) modalVideo.hidden = !available;
+  if (modalVideoEmpty) modalVideoEmpty.hidden = available;
+  if (modalBack) modalBack.disabled = !available;
+  if (modalPlay) modalPlay.disabled = !available;
+  if (modalForward) modalForward.disabled = !available;
 }
 
 function renderNextGoals(session: ReturnType<typeof getCompletedSession>) {
@@ -114,7 +178,7 @@ function renderChart(session: ReturnType<typeof getCompletedSession>) {
   });
 }
 
-function render() {
+async function render() {
   syncThemeToggle();
   const params = new URLSearchParams(location.search);
   const sessions = getCompletedSessions();
@@ -168,12 +232,12 @@ function render() {
   renderMoments(session);
   renderNextGoals(session);
   renderChart(session);
+  await attachModalVideo(session);
 
   const modalLines = [
     session.report.top_priorities[0]?.text,
     session.report.top_priorities[0]?.suggestion,
   ].filter(Boolean);
-  if (modalVideo) modalVideo.textContent = session.report.evidence_clips[0]?.reason || '중요하게 돌아볼 구간';
   if (modalFeedback) modalFeedback.textContent = modalLines.join(' ') || '세부 코칭이 준비되면 이곳에 표시됩니다.';
 }
 

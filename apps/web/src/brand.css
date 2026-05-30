@@ -839,7 +839,7 @@ button.btn-primary {
 
 .moment-card {
   display: grid;
-  grid-template-columns: 48px 1fr auto;
+  grid-template-columns: 84px 1fr auto;
   gap: 8px;
   align-items: center;
   padding: 10px;
@@ -847,6 +847,12 @@ button.btn-primary {
   border-radius: var(--radius-md);
   background: var(--card);
   text-align: left;
+}
+
+.moment-time-range {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
 }
 
 .moment-card.is-good em {
@@ -878,15 +884,42 @@ button.btn-primary {
   padding: 0;
 }
 
+.modal-moment-meta {
+  margin-right: 42px;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .modal-video {
-  display: grid;
-  place-items: center;
+  display: block;
+  width: 100%;
   min-height: 220px;
+  max-height: min(55vh, 420px);
   margin: 12px 0;
   border-radius: var(--radius-lg);
   background: #20242c;
   color: #FFFFFF;
   font-family: var(--font-mono);
+}
+
+.modal-video-empty {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  margin: 12px 0;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: #20242c;
+  color: #FFFFFF;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.modal-video-empty[hidden] {
+  display: none;
 }
 
 .dashboard-shell {
@@ -1124,5 +1157,88 @@ button.btn-primary {
 
   .dashboard-shell {
     padding: 12px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #ffffff;
+    --card: #ffffff;
+    --card-strong: #ffffff;
+    --border: #d8dde8;
+    --ink: #111827;
+    --ink-muted: #4b5563;
+    --ink-faint: #6b7280;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .container,
+  #practice-root {
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .topbar,
+  .progress-steps,
+  .theme-toggle,
+  .next-goals .actions,
+  .video-modal,
+  dialog {
+    display: none !important;
+  }
+
+  .report-layout,
+  .report-header {
+    display: block !important;
+  }
+
+  .report-main,
+  .side-panel,
+  .card,
+  .score-box,
+  .chart-card,
+  .moments-panel,
+  .next-goals {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-main,
+  .side-panel {
+    padding: 0 !important;
+    border: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .report-header,
+  .report-scores,
+  .axis-cards {
+    margin-bottom: 12px;
+  }
+
+  .report-scores,
+  .axis-cards {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .side-panel {
+    display: grid !important;
+    gap: 10px !important;
+    margin-top: 12px;
+  }
+
+  .moment-card {
+    grid-template-columns: 76px 1fr auto;
   }
 }
