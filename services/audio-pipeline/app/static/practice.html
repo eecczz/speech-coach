@@ -9,11 +9,11 @@
       document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
-    <script type="module" crossorigin src="/assets/practice-DiFAZN4v.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/session-store-DZAi9Jqg.js">
-    <link rel="modulepreload" crossorigin href="/assets/client-BUXBy3We.js">
-    <link rel="stylesheet" crossorigin href="/assets/brand-CFrtT7J1.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script type="module" crossorigin src="/assets/practice-CasoAkl5.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/session-store-BpFmEzNS.js">
+    <link rel="modulepreload" crossorigin href="/assets/client-Ba9ZAHzl.js">
+    <link rel="stylesheet" crossorigin href="/assets/brand-CkqxZ9BY.css">
   </head>
   <body>
     <main id="practice-root" class="app-shell">
@@ -58,6 +58,24 @@
             <div class="timer">00:00</div>
             <div id="status" class="status">카메라 준비 중</div>
             <pre id="debug" class="debug"></pre>
+          </section>
+
+          <section class="hud-grid" id="live-hud" aria-label="실시간 지표">
+            <div class="hud-card is-muted" data-hud-card="wpm">
+              <span>말 속도</span>
+              <strong data-hud-value>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+            <div class="hud-card is-muted" data-hud-card="filler">
+              <span>필러 표현</span>
+              <strong data-hud-value>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
+            <div class="hud-card is-muted" data-hud-card="silence">
+              <span>침묵 구간</span>
+              <strong data-hud-value>—</strong>
+              <div class="meter"><i style="width: 0%"></i></div>
+            </div>
           </section>
 
           <section class="upload-mode" id="upload-panel" hidden style="display:none;">
@@ -112,9 +130,9 @@
           </section>
           <section class="card focus-panel">
             <h2>포커스 현황</h2>
-            <div class="axis-row"><span class="axis-label">언어적</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
-            <div class="axis-row"><span class="axis-label">준언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
-            <div class="axis-row"><span class="axis-label">비언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row" data-live-axis="verbal"><span class="axis-label">언어적</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row" data-live-axis="prosody"><span class="axis-label">준언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+            <div class="axis-row" data-live-axis="nonverbal"><span class="axis-label">비언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
           </section>
         </aside>
       </section>
@@ -174,6 +192,7 @@
       const avatarReviewToggle = document.getElementById('avatar-review-toggle');
       const uploadPanel = document.getElementById('upload-panel');
       const livePanel = document.getElementById('live-panel');
+      const liveHud = document.getElementById('live-hud');
       const liveControls = document.getElementById('live-controls');
       const uploadControls = document.getElementById('upload-controls');
 
@@ -185,6 +204,8 @@
         uploadControls.style.display = isUpload ? '' : 'none';
         livePanel.hidden = isUpload;
         livePanel.style.display = isUpload ? 'none' : '';
+        liveHud.hidden = isUpload;
+        liveHud.style.display = isUpload ? 'none' : '';
         liveControls.hidden = isUpload;
         liveControls.style.display = isUpload ? 'none' : '';
       }
@@ -252,6 +273,6 @@
 
       syncPracticeMode(document.querySelector('.tab.is-active')?.dataset.mode || 'live');
       syncThemeToggle();
-    </script>
+    </script>
   </body>
 </html>

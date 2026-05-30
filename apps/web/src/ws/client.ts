@@ -48,7 +48,7 @@ export interface HudClient {
 export async function finalizeSession(
   sessionId: string,
   audioResult?: AudioAnalysisResult | null,
-  httpBase = '',
+  httpBase = defaultAggregatorHttpBase(),
 ): Promise<unknown> {
   const body: Record<string, unknown> = { session_id: sessionId };
   if (audioResult) {

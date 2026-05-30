@@ -3,7 +3,6 @@ import { createLandmarkers } from './mediapipe/landmarkers';
 import type { ComprehensiveReport } from './review/types';
 import {
   clearPendingAnalysis,
-  clearPendingMedia,
   getPendingAnalysis,
   loadPendingMedia,
   saveCompletedSession,
@@ -166,8 +165,10 @@ async function run() {
       source: pending.source,
       createdAt: pending.createdAt,
       report,
+      mediaId: pending.mediaId,
+      filename: pending.filename,
+      mimeType: pending.mimeType,
     });
-    await clearPendingMedia(pending.mediaId);
     clearPendingAnalysis();
     showPhase('done', pending.source);
     setStatus('코칭이 준비됐어요. 결과 화면으로 이동합니다.');

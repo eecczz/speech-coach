@@ -8,9 +8,9 @@ import {
 import { resolveAvatarUrl } from './avatar/registry';
 import { createLandmarkers, detect } from './mediapipe/landmarkers';
 import { AvatarRecorder } from './recorder/canvas-record';
-import { computeVisionFrame, resetSignalState } from './signals/compute';
+import { computeVisionFrame, resetSignalState, type VisionFrame } from './signals/compute';
 import { SilenceDetector } from './signals/silence';
-import { createAggregatorClient } from './ws/client';
+import { createAggregatorClient, createHudClient, type LiveHudResponse } from './ws/client';
 import { savePendingMedia, setPendingAnalysis } from './session-store';
 
 const status = document.getElementById('status') as HTMLDivElement;
@@ -24,6 +24,16 @@ const btnAnalyze = document.getElementById('btn-analyze') as HTMLButtonElement;
 const recorded = document.getElementById('recorded') as HTMLVideoElement;
 const timerEl = document.querySelector('.timer') as HTMLDivElement | null;
 const recordBadge = document.querySelector('.record-badge') as HTMLDivElement | null;
+const hudCards = {
+  wpm: document.querySelector<HTMLElement>('[data-hud-card="wpm"]'),
+  filler: document.querySelector<HTMLElement>('[data-hud-card="filler"]'),
+  silence: document.querySelector<HTMLElement>('[data-hud-card="silence"]'),
+};
+const focusAxes = {
+  verbal: document.querySelector<HTMLElement>('[data-live-axis="verbal"]'),
+  prosody: document.querySelector<HTMLElement>('[data-live-axis="prosody"]'),
+  nonverbal: document.querySelector<HTMLElement>('[data-live-axis="nonverbal"]'),
+};
 
 const params = new URLSearchParams(location.search);
 const projectName = params.get('project') || '오늘의 말하기 연습';
@@ -130,6 +140,89 @@ function setRecordBadge(label: string, state: 'idle' | 'recording' | 'done' = 'i
   recordBadge.append(label);
 }
 
+function setHudCard(
+  key: keyof typeof hudCards,
+  value: string,
+  meterPct: number,
+  tone: 'idle' | 'ok' | 'warn' | 'critical' = 'idle',
+): void {
+  const card = hudCards[key];
+  if (!card) return;
+  const valueEl = card.querySelector<HTMLElement>('[data-hud-value]');
+  const meterEl = card.querySelector<HTMLElement>('.meter i');
+  card.classList.remove('is-muted', 'is-ok', 'is-warn', 'is-critical');
+  card.classList.add(
+    tone === 'ok' ? 'is-ok' : tone === 'warn' ? 'is-warn' : tone === 'critical' ? 'is-critical' : 'is-muted',
+  );
+  if (valueEl) valueEl.textContent = value;
+  if (meterEl) meterEl.style.width = `${Math.max(0, Math.min(100, meterPct))}%`;
+}
+
+function resetHudCards(): void {
+  setHudCard('wpm', '—', 0, 'idle');
+  setHudCard('filler', '—', 0, 'idle');
+  setHudCard('silence', '—', 0, 'idle');
+}
+
+function setFocusAxis(key: keyof typeof focusAxes, score: number | null): void {
+  const row = focusAxes[key];
+  if (!row) return;
+  const fill = row.querySelector<HTMLElement>('.axis-fill');
+  const scoreEl = row.querySelector<HTMLElement>('.axis-score');
+  if (score == null) {
+    if (fill) fill.style.width = '0%';
+    if (scoreEl) scoreEl.textContent = '—';
+    return;
+  }
+  const clamped = Math.round(Math.max(0, Math.min(100, score)));
+  if (fill) fill.style.width = `${clamped}%`;
+  if (scoreEl) scoreEl.textContent = `${clamped}`;
+}
+
+function resetFocusAxes(): void {
+  setFocusAxis('verbal', null);
+  setFocusAxis('prosody', null);
+  setFocusAxis('nonverbal', null);
+}
+
+function parseHudNumber(text: string): number | null {
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
+}
+
+function syncHudFromResponse(payload: LiveHudResponse, recording: boolean): void {
+  if (!recording) return;
+  const byKind = new Map(payload.signals.map((signal) => [signal.kind, signal]));
+  const wpmSignal = byKind.get('wpm_very_high') ?? byKind.get('wpm_high');
+  let verbalScore = 86;
+  if (wpmSignal) {
+    const wpm = parseHudNumber(wpmSignal.text) ?? 0;
+    const tone = wpmSignal.level === 'critical' ? 'critical' : 'warn';
+    setHudCard('wpm', `${Math.round(wpm)} WPM`, Math.min(100, (wpm / 240) * 100), tone);
+    verbalScore -= wpmSignal.level === 'critical' ? 34 : 18;
+  } else {
+    setHudCard('wpm', '안정적', 42, 'ok');
+  }
+
+  const fillerSignal = byKind.get('filler_burst');
+  if (fillerSignal) {
+    const count = parseHudNumber(fillerSignal.text) ?? 0;
+    const tone = fillerSignal.level === 'critical' ? 'critical' : 'warn';
+    setHudCard('filler', `${Math.round(count)}회`, Math.min(100, count * 20), tone);
+    verbalScore -= fillerSignal.level === 'critical' ? 28 : 14;
+  } else {
+    setHudCard('filler', '낮음', 18, 'ok');
+  }
+  setFocusAxis('verbal', verbalScore);
+}
+
+function scoreNonverbalFrame(frame: VisionFrame): number {
+  const gaze = Math.max(0, Math.min(1, frame.gaze_fixation_ratio)) * 100;
+  const posture = Math.max(0, 100 - frame.posture_sway * 1200 - Math.abs(frame.shoulder_tilt) * 80);
+  const gesture = Math.max(0, 100 - frame.hand_gesture_freq * 80 - frame.hand_velocity_max * 24);
+  return gaze * 0.45 + posture * 0.35 + gesture * 0.2;
+}
+
 async function bootstrap() {
   setStatus('카메라/마이크 권한 요청 중…');
   let stream = await acquireStream();
@@ -174,11 +267,15 @@ async function bootstrap() {
 
   setStatus('준비됨 — 거울처럼 따라옵니다. 녹화를 시작하면 webm 저장됩니다.');
   btnStart.disabled = false;
+  btnStart.textContent = '녹화 시작';
   setTimer(0);
   setRecordBadge('대기 중');
+  resetHudCards();
+  resetFocusAxes();
 
   const recorder = new AvatarRecorder();
   const aggregator = createAggregatorClient();
+  const hudClient = createHudClient();
   let recording = false;
   let recordingStartTSec = 0;
   let lastSignalSendT = 0;
@@ -187,9 +284,14 @@ async function bootstrap() {
   let sessionId = '';
   const scenario = SCENARIO_MAP[typeName] || 'presentation';
 
+  await hudClient.connect((payload) => {
+    syncHudFromResponse(payload, recording);
+  });
+
   btnStart.addEventListener('click', async () => {
     btnStart.disabled = true;
     btnAnalyze.disabled = true;
+    btnStart.textContent = '녹화 중';
     setTimer(0);
     setRecordBadge('녹화 중', 'recording');
     setStatus('세션 시작 중…');
@@ -205,6 +307,8 @@ async function bootstrap() {
     lastSignalSendT = 0;
     lastProsodySendT = 0;
     btnStop.disabled = false;
+    resetHudCards();
+    resetFocusAxes();
     setStatus(`녹화 중… (세션 ${sessionId})`);
   });
 
@@ -245,6 +349,7 @@ async function bootstrap() {
     } catch (e) {
       console.error('[practice] failed to hand off live analysis', e);
       btnStart.disabled = false;
+      btnStart.textContent = '다시 녹화';
       btnStop.disabled = false;
       setStatus('분석 준비에 실패했어요. 다시 시도해주세요.');
     }
@@ -348,6 +453,7 @@ async function bootstrap() {
           if (sessionT - lastSignalSendT >= 0.2) {
             const frame = computeVisionFrame(sessionT, face, pose, hand);
             aggregator.sendVision(frame);
+            setFocusAxis('nonverbal', scoreNonverbalFrame(frame));
             lastSignalSendT = sessionT;
           }
           if (silenceDetector && sessionT - lastProsodySendT >= 1.0) {
@@ -358,6 +464,14 @@ async function bootstrap() {
               silence_seconds: silenceSeconds,
               rms_mean: rmsMean,
             });
+            const tone = silenceSeconds >= 4 ? 'warn' : silenceSeconds >= 2 ? 'ok' : 'idle';
+            setHudCard(
+              'silence',
+              silenceSeconds > 0.1 ? `${silenceSeconds.toFixed(1)}초` : '짧음',
+              Math.min(100, (silenceSeconds / 4) * 100),
+              tone,
+            );
+            setFocusAxis('prosody', silenceSeconds >= 4 ? 48 : silenceSeconds >= 2 ? 72 : 86);
             silenceDetector.resetWindow();
             lastProsodySendT = sessionT;
           }
@@ -389,6 +503,7 @@ async function bootstrap() {
   });
 
   window.addEventListener('pagehide', () => {
+    hudClient.close();
     aggregator.close();
   });
 }

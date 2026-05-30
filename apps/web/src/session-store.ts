@@ -17,6 +17,9 @@ export interface SessionMeta {
 
 export interface CompletedSession extends SessionMeta {
   report: ComprehensiveReport;
+  mediaId?: string;
+  filename?: string;
+  mimeType?: string;
 }
 
 export interface PendingAnalysis extends SessionMeta {
@@ -95,15 +98,31 @@ function openDb(): Promise<IDBDatabase> {
 
 async function withStore<T>(
   mode: IDBTransactionMode,
-  action: (store: IDBObjectStore, resolve: (value: T) => void, reject: (reason?: unknown) => void) => void,
+  action: (store: IDBObjectStore, setResult: (value: T) => void, reject: (reason?: unknown) => void) => void,
 ): Promise<T> {
   const db = await openDb();
   return new Promise<T>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, mode);
     const store = tx.objectStore(STORE_NAME);
-    action(store, resolve, reject);
-    tx.oncomplete = () => db.close();
-    tx.onerror = () => reject(tx.error ?? new Error('indexedDB transaction failed'));
+    let result: T;
+    let settled = false;
+    const fail = (reason?: unknown) => {
+      if (settled) return;
+      settled = true;
+      db.close();
+      reject(reason);
+    };
+    action(store, (value) => {
+      result = value;
+    }, fail);
+    tx.oncomplete = () => {
+      if (settled) return;
+      settled = true;
+      db.close();
+      resolve(result);
+    };
+    tx.onerror = () => fail(tx.error ?? new Error('indexedDB transaction failed'));
+    tx.onabort = () => fail(tx.error ?? new Error('indexedDB transaction aborted'));
   });
 }
 
