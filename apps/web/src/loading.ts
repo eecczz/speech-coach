@@ -1,5 +1,6 @@
 import { uploadForAnalysis } from './audio-upload';
 import { createLandmarkers } from './mediapipe/landmarkers';
+import { touchProject } from './project-store';
 import type { ComprehensiveReport } from './review/types';
 import {
   clearPendingAnalysis,
@@ -160,12 +161,13 @@ async function run() {
 
     saveCompletedSession({
       sessionId: pending.sessionId,
+      projectId: pending.projectId,
       project: pending.project,
       goal: pending.goal,
       type: pending.type,
+      situation: pending.situation,
       source: pending.source,
       createdAt: pending.createdAt,
-      situation: pending.situation,
       report,
       mediaId: pending.mediaId,
       filename: pending.filename,
@@ -187,6 +189,7 @@ async function run() {
         console.warn('[loading] remote session save failed', error);
       });
     }
+    touchProject(pending.projectId);
     clearPendingAnalysis();
     showPhase('done', pending.source);
     setStatus('코칭이 준비됐어요. 결과 화면으로 이동합니다.');

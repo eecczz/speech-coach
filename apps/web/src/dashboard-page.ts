@@ -113,7 +113,7 @@ function renderScenarioBreakdown() {
 
   const scores = new Map<string, number[]>();
   sessions.forEach((session) => {
-    const key = TYPE_LABEL[session.type] || '기타';
+    const key = session.situation || TYPE_LABEL[session.type] || session.type || '기타';
     const row = scores.get(key) ?? [];
     row.push(session.report.accuracy_overall);
     scores.set(key, row);

@@ -8,12 +8,13 @@ const STORE_NAME = 'pending-media';
 
 export interface SessionMeta {
   sessionId: string;
+  projectId?: string;
   project: string;
   goal: string[];
   type: string;
+  situation?: string;
   source: 'live' | 'upload';
   createdAt: string;
-  situation?: string;
 }
 
 export interface CompletedSession extends SessionMeta {

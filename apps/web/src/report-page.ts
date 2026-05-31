@@ -382,9 +382,11 @@ async function render() {
   if (retryLink) {
     const retryUrl = new URL('practice.html', location.href);
     retryUrl.searchParams.set('sessionId', session.sessionId);
+    if (session.projectId) retryUrl.searchParams.set('projectId', session.projectId);
     retryUrl.searchParams.set('project', session.project);
     retryUrl.searchParams.set('goal', goalText);
     retryUrl.searchParams.set('type', session.type);
+    if (session.situation) retryUrl.searchParams.set('situation', session.situation);
     retryLink.href = retryUrl.toString();
   }
 

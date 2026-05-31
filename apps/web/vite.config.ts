@@ -10,6 +10,8 @@ export default defineConfig({
       input: {
         index: resolve(__dirname, 'index.html'),
         createProject: resolve(__dirname, 'create-project.html'),
+        practiceSituation: resolve(__dirname, 'practice-situation.html'),
+        focusSelection: resolve(__dirname, 'focus-selection.html'),
         loading: resolve(__dirname, 'loading.html'),
         practice: resolve(__dirname, 'practice.html'),
         report: resolve(__dirname, 'report.html'),
