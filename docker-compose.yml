@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: presentation-coach-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-speakup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-speakup}
+      POSTGRES_DB: ${POSTGRES_DB:-speakup}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-speakup} -d ${POSTGRES_DB:-speakup}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   audio:
     build: ./services/audio-pipeline
     container_name: presentation-coach-audio
@@ -12,9 +29,13 @@ services:
       JEONBUK_API_KEY: ${JEONBUK_API_KEY:-}
       JEONBUK_BASE_URL: ${JEONBUK_BASE_URL:-https://ai.jb.go.kr/student-api/v1}
       JEONBUK_STT_MODEL: ${JEONBUK_STT_MODEL:-cohere-transcribe}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://speakup:speakup@postgres:5432/speakup}
     volumes:
       # 모델 캐시 영속화 (재시작마다 8GB 재다운로드 방지)
       - whisper-cache:/root/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
     # GPU 사용 시 주석 해제 + NVIDIA Container Toolkit 설치 (Windows: WSL2 + nvidia-container-toolkit)
     # deploy:
     #   resources:
@@ -55,3 +76,4 @@ services:
 
 volumes:
   whisper-cache:
+  postgres-data:

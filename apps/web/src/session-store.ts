@@ -13,6 +13,7 @@ export interface SessionMeta {
   type: string;
   source: 'live' | 'upload';
   createdAt: string;
+  situation?: string;
 }
 
 export interface CompletedSession extends SessionMeta {

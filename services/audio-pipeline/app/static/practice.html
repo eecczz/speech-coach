@@ -3,136 +3,126 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>연습 - SpeakUp</title>
+    <title>AI agent 세션 - SpeakUp</title>
     <script>
       const savedTheme = localStorage.getItem('speakup-theme');
       document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
-    <script type="module" crossorigin src="/assets/practice-CasoAkl5.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/session-store-BpFmEzNS.js">
+    <script type="module" crossorigin src="/assets/practice-BYUi6B5E.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/brand-BMDpxZVW.js">
     <link rel="modulepreload" crossorigin href="/assets/client-Ba9ZAHzl.js">
-    <link rel="stylesheet" crossorigin href="/assets/brand-CkqxZ9BY.css">
+    <link rel="modulepreload" crossorigin href="/assets/app-api-IExd7IAV.js">
+    <link rel="modulepreload" crossorigin href="/assets/session-store-B5Mai2d_.js">
+    <link rel="stylesheet" crossorigin href="/assets/brand-BEbkb85m.css">
   </head>
-  <body>
-    <main id="practice-root" class="app-shell">
-      <div class="topbar app-nav">
+  <body class="agent-session-page">
+    <main id="practice-root" class="agent-session-shell">
+      <header class="agent-topbar">
         <a class="brand" href="index.html" aria-label="SpeakUp 홈">
           <div class="brand-badge">S</div>
           <div class="brand-copy">
             <strong id="page-title">오늘의 말하기 연습</strong>
-            <span>Step 2 연습</span>
+            <span id="session-context">AI agent 세션</span>
           </div>
         </a>
-        <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
-      </div>
+        <div class="agent-topbar-actions">
+          <button type="button" class="btn icon-btn sidebar-toggle" id="left-sidebar-toggle" aria-label="세션 사이드바 접기" title="세션 사이드바"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
+          <button type="button" class="btn icon-btn sidebar-toggle" id="right-sidebar-toggle" aria-label="AI agent 사이드바 접기" title="AI agent 사이드바"><i class="ti ti-layout-sidebar-right-collapse"></i></button>
+          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+        </div>
+      </header>
 
-      <section class="progress-steps" aria-label="진행 단계">
-        <span>1 준비</span>
-        <span class="is-current">2 연습</span>
-        <span>3 코칭</span>
-      </section>
-
-      <section class="practice-workspace">
-        <section class="screen practice-main-panel">
-          <div class="tabs" role="tablist" aria-label="연습 방식">
-            <button type="button" class="tab is-active" data-mode="live">실시간 녹화</button>
-            <button type="button" class="tab" data-mode="upload">영상 업로드</button>
+      <section class="agent-grid" id="agent-grid">
+        <aside class="agent-sidebar left" id="session-sidebar">
+          <div class="agent-sidebar-head">
+            <strong>세션 목록</strong>
+            <a class="btn btn-ghost" href="create-project.html">새 세션</a>
           </div>
+          <div class="agent-session-list" id="agent-session-list">
+            <p>저장된 세션을 불러오는 중입니다.</p>
+          </div>
+        </aside>
 
-          <label class="upload-option" for="avatar-review-toggle">
-            <span class="upload-option-check">
-              <input id="avatar-review-toggle" type="checkbox" />
-            </span>
-            <span class="upload-option-copy">
-              <strong>아바타 모드 켜기</strong>
-              <span>내 모습 대신 아바타로 다시 볼 수 있어요.</span>
-            </span>
-          </label>
+        <section class="agent-center">
+          <section class="agent-session-statusbar">
+            <section class="progress-steps" aria-label="진행 단계">
+              <span>1 준비</span>
+              <span class="is-current">2 세션</span>
+              <span>3 리포트</span>
+            </section>
 
-          <section class="stage practice-video" id="live-panel">
-            <video id="cam" autoplay playsinline muted></video>
-            <canvas id="avatar" width="640" height="720"></canvas>
-            <div class="record-badge"><span></span>대기 중</div>
-            <div class="timer">00:00</div>
-            <div id="status" class="status">카메라 준비 중</div>
-            <pre id="debug" class="debug"></pre>
-          </section>
-
-          <section class="hud-grid" id="live-hud" aria-label="실시간 지표">
-            <div class="hud-card is-muted" data-hud-card="wpm">
-              <span>말 속도</span>
-              <strong data-hud-value>—</strong>
-              <div class="meter"><i style="width: 0%"></i></div>
-            </div>
-            <div class="hud-card is-muted" data-hud-card="filler">
-              <span>필러 표현</span>
-              <strong data-hud-value>—</strong>
-              <div class="meter"><i style="width: 0%"></i></div>
-            </div>
-            <div class="hud-card is-muted" data-hud-card="silence">
-              <span>침묵 구간</span>
-              <strong data-hud-value>—</strong>
-              <div class="meter"><i style="width: 0%"></i></div>
+            <div class="live-coach-toast" id="live-coach-toast" hidden aria-live="polite">
+              <span id="live-coach-time">00:00</span>
+              <strong id="live-coach-message">실시간 코칭</strong>
             </div>
           </section>
 
-          <section class="upload-mode" id="upload-panel" hidden style="display:none;">
-            <div class="upload-box" id="dropzone">
-              <strong>연습 영상 가져오기</strong>
-              <p>MP4 · WebM · MOV 파일을 끌어오거나 선택해주세요.</p>
-              <label for="upload-file">
-                <span class="btn btn-ghost">파일 선택</span>
-                <input id="upload-file" type="file" accept="video/*" />
+          <section class="screen practice-main-panel">
+            <div class="practice-agent-head">
+              <span class="mini-pill is-strong">실시간 코칭</span>
+              <div class="focus-inline" id="focus-inline"></div>
+            </div>
+
+            <section class="stage practice-video" id="live-panel">
+              <video id="cam" autoplay playsinline muted></video>
+              <canvas id="avatar" width="640" height="720" hidden aria-hidden="true"></canvas>
+              <div class="record-badge"><span></span>대기 중</div>
+              <div class="timer">00:00</div>
+              <div id="status" class="status">카메라 준비 중</div>
+              <pre id="debug" class="debug"></pre>
+            </section>
+
+            <section class="hud-grid" id="live-hud" aria-label="실시간 지표">
+              <div class="hud-card is-muted" data-hud-card="wpm">
+                <span>말 속도</span>
+                <strong data-hud-value>—</strong>
+                <div class="meter"><i style="width: 0%"></i></div>
+              </div>
+              <div class="hud-card is-muted" data-hud-card="filler">
+                <span>필러 표현</span>
+                <strong data-hud-value>—</strong>
+                <div class="meter"><i style="width: 0%"></i></div>
+              </div>
+              <div class="hud-card is-muted" data-hud-card="silence">
+                <span>침묵 구간</span>
+                <strong data-hud-value>—</strong>
+                <div class="meter"><i style="width: 0%"></i></div>
+              </div>
+            </section>
+            <video id="recorded" hidden></video>
+
+            <section class="controls practice-controls" id="live-controls">
+              <label class="device-pick">
+                카메라
+                <select id="cam-select"></select>
               </label>
-            </div>
-
-            <div class="file-row">
-              <div>
-                <strong id="file-name">선택된 파일이 없습니다</strong>
-                <span>업로드한 영상은 아래에서 미리 볼 수 있어요.</span>
-              </div>
-              <div class="file-row-actions">
-                <span id="file-size">—</span>
-                <button type="button" class="file-clear" id="file-clear" hidden aria-label="선택한 영상 제거">×</button>
-              </div>
-            </div>
-
-            <section id="playback" class="playback" hidden>
-              <video id="recorded" controls></video>
+              <button id="btn-start" class="btn btn-ghost" disabled>카메라 준비 중</button>
+              <button id="btn-stop" class="btn btn-ghost" disabled>중지</button>
             </section>
-
-            <section class="controls upload-controls" id="upload-controls">
-              <button id="btn-analyze" class="btn btn-primary" disabled>AI 코칭 시작</button>
-            </section>
-          </section>
-
-          <section class="controls practice-controls" id="live-controls">
-            <label class="device-pick">
-              카메라
-              <select id="cam-select"></select>
-            </label>
-            <button id="btn-start" class="btn btn-ghost" disabled>카메라 준비 중</button>
-            <button id="btn-stop" class="btn btn-ghost" disabled>중지</button>
           </section>
         </section>
 
-        <aside class="side-panel practice-side">
-          <section class="card session-summary">
-            <h2>세션 정보</h2>
-            <dl>
-              <div><dt>상황</dt><dd id="session-type">자유 연습</dd></div>
-              <div><dt>포커스</dt><dd id="goal-summary">—</dd></div>
-              <div><dt>회차</dt><dd>1회차</dd></div>
-              <div><dt>이전 점수</dt><dd>—</dd></div>
-            </dl>
-          </section>
-          <section class="card focus-panel">
-            <h2>포커스 현황</h2>
-            <div class="axis-row" data-live-axis="verbal"><span class="axis-label">언어적</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
-            <div class="axis-row" data-live-axis="prosody"><span class="axis-label">준언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
-            <div class="axis-row" data-live-axis="nonverbal"><span class="axis-label">비언어</span><span class="axis-bar"><span class="axis-fill" style="width: 0%"></span></span><span class="axis-score">—</span></div>
+        <aside class="agent-sidebar right" id="agent-sidebar">
+          <section class="agent-panel agent-chat-panel">
+            <div class="agent-sidebar-head">
+              <strong>AI agent</strong>
+              <div class="agent-head-actions">
+                <button type="button" class="btn btn-ghost voice-toggle" id="agent-voice-toggle" aria-pressed="false">
+                  <i class="ti ti-volume-off"></i>
+                  <span>음성 꺼짐</span>
+                </button>
+                <span class="mini-pill" id="agent-state">질문 대기</span>
+              </div>
+            </div>
+            <div class="agent-chat-feed" id="agent-chat-feed" aria-live="polite"></div>
+            <form class="agent-chat-input" id="agent-chat-form">
+              <input id="agent-chat-input" type="text" placeholder="지금 내 발표 어때?" />
+              <button type="submit" class="btn btn-primary agent-send-button" aria-label="agent에게 질문 보내기">
+                <i class="ti ti-send-2"></i>
+              </button>
+            </form>
           </section>
         </aside>
       </section>
@@ -144,7 +134,7 @@
       const themeToggle = document.querySelector('[data-theme-toggle]');
       const params = new URLSearchParams(location.search);
       const project = params.get('project') || '오늘의 말하기 연습';
-      const goal = params.get('goal') || '말 속도';
+      const goal = params.get('goal') || '';
       const type = params.get('type') || 'free';
       const typeLabel = {
         presentation: '발표',
@@ -153,17 +143,22 @@
         persuasion: '설득',
         daily: '일상 대화',
         phone: '전화',
-        online: '온라인',
+        online: '전화·온라인',
         free: '자유 연습',
       };
       document.getElementById('page-title').textContent = project;
-      document.getElementById('goal-summary').textContent = goal || '—';
-      document.getElementById('session-type').textContent = typeLabel[type] || '자유 연습';
+      document.getElementById('session-context').textContent = `${typeLabel[type] || '자유 연습'} · AI agent 세션`;
+      const focusInline = document.getElementById('focus-inline');
+      (goal ? goal.split(',').map((item) => item.trim()).filter(Boolean) : ['말 속도']).forEach((item) => {
+        const pill = document.createElement('span');
+        pill.className = 'mini-pill';
+        pill.textContent = item;
+        focusInline.appendChild(pill);
+      });
 
       function syncThemeToggle() {
         const theme = document.documentElement.dataset.theme || 'light';
         themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
-        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
       }
 
       themeToggle.addEventListener('click', () => {
@@ -173,105 +168,22 @@
         syncThemeToggle();
       });
 
-      document.querySelectorAll('.tab').forEach((tab) => {
-        tab.addEventListener('click', () => {
-          document.querySelectorAll('.tab').forEach((el) => el.classList.remove('is-active'));
-          tab.classList.add('is-active');
-          syncPracticeMode(tab.dataset.mode);
-        });
+      const grid = document.getElementById('agent-grid');
+      const leftToggle = document.getElementById('left-sidebar-toggle');
+      const rightToggle = document.getElementById('right-sidebar-toggle');
+
+      leftToggle.addEventListener('click', () => {
+        grid.classList.toggle('is-left-collapsed');
+        const collapsed = grid.classList.contains('is-left-collapsed');
+        leftToggle.setAttribute('aria-label', collapsed ? '세션 사이드바 펼치기' : '세션 사이드바 접기');
       });
 
-      const upload = document.getElementById('upload-file');
-      const analyze = document.getElementById('btn-analyze');
-      const recorded = document.getElementById('recorded');
-      const playback = document.getElementById('playback');
-      const fileName = document.getElementById('file-name');
-      const fileSize = document.getElementById('file-size');
-      const fileClear = document.getElementById('file-clear');
-      const dropzone = document.getElementById('dropzone');
-      const avatarReviewToggle = document.getElementById('avatar-review-toggle');
-      const uploadPanel = document.getElementById('upload-panel');
-      const livePanel = document.getElementById('live-panel');
-      const liveHud = document.getElementById('live-hud');
-      const liveControls = document.getElementById('live-controls');
-      const uploadControls = document.getElementById('upload-controls');
-
-      function syncPracticeMode(mode) {
-        const isUpload = mode === 'upload';
-        uploadPanel.hidden = !isUpload;
-        uploadPanel.style.display = isUpload ? 'grid' : 'none';
-        uploadControls.hidden = !isUpload;
-        uploadControls.style.display = isUpload ? '' : 'none';
-        livePanel.hidden = isUpload;
-        livePanel.style.display = isUpload ? 'none' : '';
-        liveHud.hidden = isUpload;
-        liveHud.style.display = isUpload ? 'none' : '';
-        liveControls.hidden = isUpload;
-        liveControls.style.display = isUpload ? 'none' : '';
-      }
-
-      function updateFileState(file) {
-        if (!file) {
-          analyze.disabled = true;
-          fileName.textContent = '선택된 파일이 없습니다';
-          fileSize.textContent = '—';
-          fileClear.hidden = true;
-          dropzone.classList.remove('is-collapsed');
-          playback.hidden = true;
-          recorded.removeAttribute('src');
-          recorded.load();
-          return;
-        }
-
-        analyze.disabled = false;
-        fileName.textContent = file.name;
-        fileSize.textContent = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-        fileClear.hidden = false;
-        dropzone.classList.add('is-collapsed');
-        recorded.src = URL.createObjectURL(file);
-        playback.hidden = false;
-      }
-
-      upload.addEventListener('change', () => {
-        const file = upload.files && upload.files[0];
-        updateFileState(file);
+      rightToggle.addEventListener('click', () => {
+        grid.classList.toggle('is-right-collapsed');
+        const collapsed = grid.classList.contains('is-right-collapsed');
+        rightToggle.setAttribute('aria-label', collapsed ? 'AI agent 사이드바 펼치기' : 'AI agent 사이드바 접기');
       });
 
-      ['dragenter', 'dragover'].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          dropzone.classList.add('is-active');
-        });
-      });
-
-      ['dragleave', 'drop'].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          dropzone.classList.remove('is-active');
-        });
-      });
-
-      dropzone.addEventListener('drop', (event) => {
-        const file = event.dataTransfer && event.dataTransfer.files[0];
-        if (!file) return;
-        const transfer = new DataTransfer();
-        transfer.items.add(file);
-        upload.files = transfer.files;
-        updateFileState(file);
-      });
-
-      fileClear.addEventListener('click', () => {
-        upload.value = '';
-        updateFileState(null);
-      });
-
-      const savedAvatarReview = localStorage.getItem('speakup-avatar-review');
-      avatarReviewToggle.checked = savedAvatarReview === 'true';
-      avatarReviewToggle.addEventListener('change', () => {
-        localStorage.setItem('speakup-avatar-review', String(avatarReviewToggle.checked));
-      });
-
-      syncPracticeMode(document.querySelector('.tab.is-active')?.dataset.mode || 'live');
       syncThemeToggle();
     </script>
   </body>

@@ -11,10 +11,11 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script type="module" crossorigin src="/assets/report-BPc4emVv.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/session-store-BpFmEzNS.js">
-    <link rel="modulepreload" crossorigin href="/assets/report-utils-F1iBMEoG.js">
-    <link rel="stylesheet" crossorigin href="/assets/brand-CkqxZ9BY.css">
+    <script type="module" crossorigin src="/assets/report-BEofomSv.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/brand-BMDpxZVW.js">
+    <link rel="modulepreload" crossorigin href="/assets/report-utils-zvqtJMof.js">
+    <link rel="modulepreload" crossorigin href="/assets/session-store-B5Mai2d_.js">
+    <link rel="stylesheet" crossorigin href="/assets/brand-BEbkb85m.css">
   </head>
   <body>
     <main class="container app-shell">
@@ -65,10 +66,11 @@
 
           <section class="card chart-card">
             <div class="panel-title">
-              <h2>발화 점수 타임라인</h2>
-              <span>분석 데이터가 준비되면 타임라인이 표시됩니다.</span>
+              <h2>주의 구간 그래프</h2>
+              <span>점으로 표시된 구간을 누르면 복기 영상이 재생됩니다.</span>
             </div>
             <canvas id="score-chart" height="132"></canvas>
+            <div class="moment-graph-guide" id="moment-graph-guide">주의 구간 점을 클릭해 해당 장면을 바로 확인하세요.</div>
           </section>
 
           <section class="axis-cards">
@@ -94,12 +96,6 @@
         </section>
 
         <aside class="side-panel">
-          <section class="card moments-panel">
-            <h2>주의 구간</h2>
-            <div id="moments-list">
-              <p>표시할 분석 구간이 아직 없습니다.</p>
-            </div>
-          </section>
           <section class="card next-goals">
             <h2>다음 세션 목표</h2>
             <ol id="next-goals-list">

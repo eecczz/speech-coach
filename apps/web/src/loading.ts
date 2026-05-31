@@ -8,6 +8,7 @@ import {
   saveCompletedSession,
 } from './session-store';
 import { analyzeUploadedVideo } from './upload-analyze';
+import { getActiveUser, saveRemoteSession } from './app-api';
 import { createAggregatorClient, finalizeSession } from './ws/client';
 
 type StepState = 'is-pending' | 'is-current' | 'is-complete';
@@ -164,11 +165,28 @@ async function run() {
       type: pending.type,
       source: pending.source,
       createdAt: pending.createdAt,
+      situation: pending.situation,
       report,
       mediaId: pending.mediaId,
       filename: pending.filename,
       mimeType: pending.mimeType,
     });
+    const activeUser = getActiveUser();
+    if (activeUser) {
+      await saveRemoteSession({
+        id: pending.sessionId,
+        user_id: activeUser.id,
+        title: pending.project,
+        scenario: pending.type,
+        situation: pending.situation || pending.project,
+        focus_goals: pending.goal,
+        source: pending.source,
+        status: 'completed',
+        last_report: report,
+      }).catch((error) => {
+        console.warn('[loading] remote session save failed', error);
+      });
+    }
     clearPendingAnalysis();
     showPhase('done', pending.source);
     setStatus('코칭이 준비됐어요. 결과 화면으로 이동합니다.');

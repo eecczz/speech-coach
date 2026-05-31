@@ -14,7 +14,6 @@ const currentScoreEl = document.getElementById('current-score') as HTMLElement |
 const targetScoreEl = document.getElementById('target-score') as HTMLElement | null;
 const deltaScoreEl = document.getElementById('delta-score') as HTMLElement | null;
 const summaryEl = document.getElementById('ai-summary') as HTMLElement | null;
-const momentsList = document.getElementById('moments-list') as HTMLElement | null;
 const nextGoalsList = document.getElementById('next-goals-list') as HTMLOListElement | null;
 const downloadVideoButton = document.getElementById('download-video-link') as HTMLButtonElement | null;
 const downloadMp4Button = document.getElementById('download-mp4-link') as HTMLButtonElement | null;
@@ -201,6 +200,16 @@ function formatMomentRange(moment: Pick<AnnotatedMoment, 't' | 'duration_s'>): s
   return `${start}-${formatTimeShort(moment.t + duration)}`;
 }
 
+function openMoment(moment: AnnotatedMoment): void {
+  activeMomentTime = moment.t;
+  seekModalVideo(activeMomentTime);
+  if (modalMomentMeta) {
+    modalMomentMeta.textContent = `${formatMomentRange(moment)} · ${moment.title}`;
+  }
+  if (modalFeedback) modalFeedback.textContent = moment.coach_comment || '이 구간의 코칭 코멘트가 여기에 표시됩니다.';
+  (document.getElementById('video-modal') as HTMLDialogElement | null)?.showModal();
+}
+
 function setAxisCard(key: 'verbal' | 'prosody' | 'nonverbal', score: number | null, note: string) {
   const card = document.querySelector<HTMLElement>(`[data-axis-card="${key}"]`);
   if (!card) return;
@@ -210,42 +219,6 @@ function setAxisCard(key: 'verbal' | 'prosody' | 'nonverbal', score: number | nu
   if (valueEl) valueEl.textContent = typeof score === 'number' ? `${Math.round(score)}` : '—';
   if (noteEl) noteEl.textContent = note;
   if (meter) meter.style.width = `${Math.max(0, Math.min(100, score ?? 0))}%`;
-}
-
-function renderMoments(session: ReturnType<typeof getCompletedSession>) {
-  if (!momentsList || !session) return;
-  const topMoments = getTopMoments(session.report, 3);
-  if (topMoments.length === 0) {
-    momentsList.innerHTML = '<p>표시할 분석 구간이 아직 없습니다.</p>';
-    return;
-  }
-  momentsList.innerHTML = topMoments
-    .map(
-      (moment) => {
-        const range = formatMomentRange(moment);
-        return `
-        <button type="button" class="moment-card" data-moment-title="${moment.title}" data-moment-comment="${moment.coach_comment ?? ''}" data-moment-time="${moment.t}" data-moment-range="${range}">
-          <span class="moment-time-range">${range}</span>
-          <p>${moment.title}</p>
-          <em>${moment.axis}</em>
-        </button>
-      `;
-      },
-    )
-    .join('');
-
-  momentsList.querySelectorAll<HTMLButtonElement>('[data-moment-title]').forEach((button) => {
-    button.addEventListener('click', () => {
-      activeMomentTime = Number(button.dataset.momentTime || 0);
-      seekModalVideo(activeMomentTime);
-      if (modalMomentMeta) {
-        const range = button.dataset.momentRange || formatTimeShort(activeMomentTime);
-        modalMomentMeta.textContent = `${range} · ${button.dataset.momentTitle || '주의 구간'}`;
-      }
-      if (modalFeedback) modalFeedback.textContent = button.dataset.momentComment || '이 구간의 코칭 코멘트가 여기에 표시됩니다.';
-      (document.getElementById('video-modal') as HTMLDialogElement | null)?.showModal();
-    });
-  });
 }
 
 async function attachModalVideo(session: ReturnType<typeof getCompletedSession>) {
@@ -300,17 +273,71 @@ function renderChart(session: ReturnType<typeof getCompletedSession>) {
   if (!canvas || !session) return;
   const labels = session.report.score_timeline.map((sample) => formatTimeShort(sample.t));
   const data = session.report.score_timeline.map((sample) => Number(sample.score.toFixed(1)));
+  const topMoments = getTopMoments(session.report, 8);
+  const momentsByIndex = new Map<number, AnnotatedMoment>();
+  const momentData = labels.map(() => null as number | null);
+  topMoments.forEach((moment) => {
+    const nearestIndex = session.report.score_timeline.reduce((bestIndex, sample, index, samples) => {
+      const bestDelta = Math.abs(samples[bestIndex].t - moment.t);
+      const nextDelta = Math.abs(sample.t - moment.t);
+      return nextDelta < bestDelta ? index : bestIndex;
+    }, 0);
+    momentsByIndex.set(nearestIndex, moment);
+    momentData[nearestIndex] = data[nearestIndex] ?? Math.max(40, 100 + Math.min(0, moment.impact));
+  });
   new Chart(canvas, {
     type: 'line',
     data: {
       labels,
       datasets: [
-        { label: '점수', data, borderColor: '#AFCBFF', backgroundColor: '#AFCBFF', pointBackgroundColor: ['#AFCBFF', '#CDEEE7', '#F3C9D0', '#F6E6A8'], pointRadius: 3, borderWidth: 2, tension: 0.28 },
+        {
+          label: '발화 흐름',
+          data,
+          borderColor: '#AFCBFF',
+          backgroundColor: '#AFCBFF',
+          pointBackgroundColor: '#AFCBFF',
+          pointRadius: 3,
+          borderWidth: 2,
+          tension: 0.28,
+        },
+        {
+          label: '주의 구간',
+          data: momentData,
+          borderColor: 'transparent',
+          backgroundColor: '#2e2c3a',
+          pointBackgroundColor: '#2e2c3a',
+          pointBorderColor: '#CDEEE7',
+          pointBorderWidth: 3,
+          pointRadius: 7,
+          pointHoverRadius: 9,
+          showLine: false,
+        },
       ],
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      onClick: (_event: unknown, elements: Array<{ datasetIndex: number; index: number }>) => {
+        const hit = elements.find((element) => element.datasetIndex === 1);
+        if (!hit) return;
+        const moment = momentsByIndex.get(hit.index);
+        if (moment) openMoment(moment);
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items: Array<{ dataIndex: number }>) => {
+              const moment = momentsByIndex.get(items[0]?.dataIndex ?? -1);
+              return moment ? formatMomentRange(moment) : '';
+            },
+            label: (item: { datasetIndex: number; dataIndex: number; formattedValue: string }) => {
+              const moment = momentsByIndex.get(item.dataIndex);
+              if (item.datasetIndex === 1 && moment) return `${moment.title} · 클릭해서 복기`;
+              return `점수: ${item.formattedValue}`;
+            },
+          },
+        },
+      },
       scales: {
         y: { min: 0, max: 100, grid: { color: 'rgba(151, 165, 188, 0.18)' } },
         x: { grid: { display: false } },
@@ -353,7 +380,12 @@ async function render() {
     summaryEl.textContent = session.report.overall_summary || '이번 연습의 종합 코칭이 여기에 표시됩니다.';
   }
   if (retryLink) {
-    retryLink.href = `practice.html?project=${encodeURIComponent(session.project)}&goal=${encodeURIComponent(goalText)}&type=${encodeURIComponent(session.type)}`;
+    const retryUrl = new URL('practice.html', location.href);
+    retryUrl.searchParams.set('sessionId', session.sessionId);
+    retryUrl.searchParams.set('project', session.project);
+    retryUrl.searchParams.set('goal', goalText);
+    retryUrl.searchParams.set('type', session.type);
+    retryLink.href = retryUrl.toString();
   }
 
   setAxisCard(
@@ -372,7 +404,6 @@ async function render() {
     session.report.top_priorities[0]?.suggestion || '시선, 자세, 표정 흐름을 함께 돌아봤어요.',
   );
 
-  renderMoments(session);
   renderNextGoals(session);
   renderChart(session);
   await attachModalVideo(session);

@@ -206,6 +206,20 @@ button.btn-primary {
   font-size: 0.85rem;
 }
 
+.icon-btn {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.icon-btn i {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
 .field {
   gap: 8px;
 }
@@ -274,6 +288,12 @@ button.btn-primary {
 }
 
 .chip.is-selected {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.mini-pill.is-strong {
   background: var(--accent);
   color: var(--accent-text);
   border-color: var(--accent);
@@ -977,6 +997,545 @@ button.btn-primary {
   gap: 12px;
   align-items: flex-start;
   justify-content: space-between;
+}
+
+.session-setup-page,
+.agent-session-page {
+  min-height: 100vh;
+}
+
+.session-setup-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 18px;
+  place-items: center;
+  padding: 22px;
+}
+
+.session-setup-nav,
+.agent-topbar {
+  width: min(1280px, calc(100vw - 40px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-user-chip {
+  margin-left: auto;
+  padding: 7px 12px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
+.session-choice {
+  display: flex;
+  gap: 8px;
+}
+
+.session-wizard-card {
+  width: min(850px, calc(100vw - 36px));
+  min-height: 400px;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 14px;
+  padding: 18px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+}
+
+.wizard-header,
+.wizard-footer,
+.wizard-actions,
+.practice-agent-head,
+.agent-sidebar-head,
+.agent-topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wizard-footer .btn-primary {
+  margin-left: auto;
+}
+
+.wizard-header h1 {
+  margin-top: 8px;
+  font-size: 1.55rem;
+}
+
+.wizard-steps {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.wizard-steps span {
+  padding: 5px 10px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.wizard-steps .is-current {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.wizard-panel {
+  display: none;
+}
+
+.wizard-panel.is-active {
+  min-height: 190px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field textarea,
+.existing-select {
+  width: 100%;
+  min-height: 38px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.scenario-grid.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.focus-intro {
+  display: grid;
+  gap: 4px;
+}
+
+.focus-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.existing-head,
+.existing-session-detail {
+  display: grid;
+  gap: 6px;
+}
+
+.existing-session-detail {
+  padding: 12px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+}
+
+.existing-session-detail strong,
+.existing-session-detail span,
+.existing-session-detail em {
+  display: block;
+}
+
+.existing-session-detail strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.existing-session-detail em {
+  font-style: normal;
+}
+
+.wizard-error {
+  min-height: 20px;
+  color: var(--warning);
+  font-size: 0.78rem;
+}
+
+.agent-session-shell {
+  width: 100%;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 14px;
+  padding: clamp(12px, 2vw, 18px);
+  overflow-x: hidden;
+}
+
+#practice-root.agent-session-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: clamp(12px, 2vw, 18px);
+}
+
+.agent-grid {
+  width: min(100%, 1680px);
+  margin: 0 auto;
+  min-height: calc(100vh - 86px);
+  display: grid;
+  grid-template-columns: clamp(190px, 15vw, 240px) minmax(0, 1fr) clamp(270px, 21vw, 340px);
+  gap: 14px;
+  align-items: stretch;
+  transition: grid-template-columns 0.18s ease;
+  overflow: hidden;
+}
+
+.agent-grid.is-left-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) clamp(270px, 21vw, 340px);
+}
+
+.agent-grid.is-right-collapsed {
+  grid-template-columns: clamp(190px, 15vw, 240px) minmax(0, 1fr) 0;
+}
+
+.agent-grid.is-left-collapsed.is-right-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+
+.agent-sidebar {
+  min-width: 0;
+  overflow: hidden;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 14px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+
+.agent-grid.is-left-collapsed .agent-sidebar.left,
+.agent-grid.is-right-collapsed .agent-sidebar.right {
+  padding: 0;
+  border: 0;
+}
+
+.agent-center {
+  min-width: 0;
+  max-width: 100%;
+  position: relative;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  overflow: hidden;
+}
+
+.agent-session-statusbar {
+  position: relative;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.live-coach-toast {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 20;
+  width: min(620px, 72%);
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  color: var(--ink);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -6px) scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.live-coach-toast[hidden] {
+  display: none;
+}
+
+.live-coach-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.live-coach-toast span {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.live-coach-toast strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.agent-center .practice-video {
+  width: 100%;
+  min-height: 0;
+  height: clamp(300px, 50vh, 620px);
+  max-height: calc(100vh - 280px);
+}
+
+.practice-main-panel,
+.stage,
+.practice-video {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.practice-video #cam {
+  position: static;
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+  transform: scaleX(-1);
+}
+
+.practice-video #avatar {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.agent-session-list,
+.agent-chat-feed {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-session-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.agent-session-item span {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+}
+
+.agent-session-item.is-current {
+  border-color: var(--accent);
+  background: var(--bg-soft);
+}
+
+.agent-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.agent-sidebar.right {
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
+.agent-chat-panel {
+  min-height: 0;
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.agent-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.voice-toggle {
+  min-height: 30px;
+  padding: 0 10px;
+  gap: 5px;
+  font-size: 0.72rem;
+}
+
+.voice-toggle i {
+  font-size: 0.9rem;
+}
+
+.agent-chat-feed {
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  align-content: start;
+  padding-right: 2px;
+}
+
+.agent-bubble {
+  display: grid;
+  gap: 4px;
+  max-width: 92%;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+}
+
+.agent-bubble span {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.agent-bubble p {
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.agent-bubble.is-user {
+  justify-self: end;
+  background: var(--accent);
+}
+
+.agent-bubble.is-user p,
+.agent-bubble.is-user span {
+  color: var(--accent-text);
+}
+
+.agent-chat-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+}
+
+.agent-chat-input input {
+  min-width: 0;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 11px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.agent-send-button {
+  min-width: 38px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.agent-send-button i {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.focus-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.moment-graph-guide {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
+@media (max-width: 1180px) {
+  .agent-grid,
+  .agent-grid.is-left-collapsed,
+  .agent-grid.is-right-collapsed,
+  .agent-grid.is-left-collapsed.is-right-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-sidebar {
+    min-height: auto;
+  }
+
+  .agent-sidebar.left,
+  .agent-sidebar.right {
+    display: none;
+  }
+
+  .agent-grid:not(.is-left-collapsed) .agent-sidebar.left,
+  .agent-grid:not(.is-right-collapsed) .agent-sidebar.right {
+    display: grid;
+  }
+
+  .agent-center .practice-video {
+    height: clamp(280px, 48vh, 520px);
+    max-height: none;
+  }
+
+  .live-coach-toast {
+    width: min(520px, 78%);
+  }
+
+  .auth-grid,
+  .scenario-grid.compact,
+  .focus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .session-wizard-card {
+    min-height: auto;
+  }
+
+  .wizard-header,
+  .wizard-footer,
+  .practice-agent-head,
+  .agent-topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auth-grid,
+  .scenario-grid.compact,
+  .focus-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .goal-banner {
