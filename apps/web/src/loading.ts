@@ -1,5 +1,6 @@
 import { uploadForAnalysis } from './audio-upload';
 import { createLandmarkers } from './mediapipe/landmarkers';
+import { touchProject } from './project-store';
 import type { ComprehensiveReport } from './review/types';
 import {
   clearPendingAnalysis,
@@ -159,6 +160,7 @@ async function run() {
 
     saveCompletedSession({
       sessionId: pending.sessionId,
+      projectId: pending.projectId,
       project: pending.project,
       goal: pending.goal,
       type: pending.type,
@@ -170,6 +172,7 @@ async function run() {
       filename: pending.filename,
       mimeType: pending.mimeType,
     });
+    touchProject(pending.projectId);
     clearPendingAnalysis();
     showPhase('done', pending.source);
     setStatus('코칭이 준비됐어요. 결과 화면으로 이동합니다.');

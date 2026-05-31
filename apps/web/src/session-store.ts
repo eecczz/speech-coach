@@ -8,6 +8,7 @@ const STORE_NAME = 'pending-media';
 
 export interface SessionMeta {
   sessionId: string;
+  projectId?: string;
   project: string;
   goal: string[];
   type: string;

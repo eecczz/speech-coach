@@ -16,7 +16,7 @@
   <body>
     <main id="practice-root" class="app-shell">
       <div class="topbar app-nav">
-        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
+        <a class="brand" href="create-project.html" aria-label="SpeakUp 프로젝트">
           <div class="brand-badge">S</div>
           <div class="brand-copy">
             <strong id="page-title">오늘의 말하기 연습</strong>
@@ -122,8 +122,8 @@
             <dl>
               <div><dt>상황</dt><dd id="session-type">자유 연습</dd></div>
               <div><dt>포커스</dt><dd id="goal-summary">—</dd></div>
-              <div><dt>회차</dt><dd>1회차</dd></div>
-              <div><dt>이전 점수</dt><dd>—</dd></div>
+              <div><dt>회차</dt><dd id="session-round">1회차</dd></div>
+              <div><dt>이전 점수</dt><dd id="previous-score">—</dd></div>
             </dl>
           </section>
           <section class="card focus-panel">
@@ -142,9 +142,16 @@
       const themeToggle = document.querySelector('[data-theme-toggle]');
       const params = new URLSearchParams(location.search);
       const project = params.get('project') || '오늘의 말하기 연습';
+      const projectId = params.get('projectId') || localStorage.getItem('speakup-current-project-id') || '';
       const goal = params.get('goal') || '말 속도';
       const type = params.get('type') || 'free';
       const situation = params.get('situation') || localStorage.getItem('speakup-practice-situation') || '';
+      const completedSessions = JSON.parse(localStorage.getItem('speakup-completed-sessions') || '[]');
+      const relatedSessions = completedSessions.filter((session) => {
+        if (projectId && session.projectId) return session.projectId === projectId;
+        return session.project === project;
+      });
+      const latestScore = relatedSessions[0] && relatedSessions[0].report ? Math.round(relatedSessions[0].report.accuracy_overall) : null;
       const typeLabel = {
         presentation: '발표',
         interview: '면접',
@@ -158,6 +165,8 @@
       document.getElementById('page-title').textContent = project;
       document.getElementById('goal-summary').textContent = goal || '—';
       document.getElementById('session-type').textContent = situation || typeLabel[type] || '자유 연습';
+      document.getElementById('session-round').textContent = `${relatedSessions.length + 1}회차`;
+      document.getElementById('previous-score').textContent = latestScore == null ? '—' : `${latestScore}`;
 
       function syncThemeToggle() {
         const theme = document.documentElement.dataset.theme || 'light';

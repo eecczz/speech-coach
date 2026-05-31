@@ -11,6 +11,7 @@ import { AvatarRecorder } from './recorder/canvas-record';
 import { computeVisionFrame, resetSignalState, type VisionFrame } from './signals/compute';
 import { SilenceDetector } from './signals/silence';
 import { createAggregatorClient, createHudClient, type LiveHudResponse } from './ws/client';
+import { getCurrentProject, getProjectById } from './project-store';
 import { savePendingMedia, setPendingAnalysis } from './session-store';
 
 const status = document.getElementById('status') as HTMLDivElement;
@@ -36,13 +37,20 @@ const focusAxes = {
 };
 
 const params = new URLSearchParams(location.search);
-const projectName = params.get('project') || '오늘의 말하기 연습';
+const projectId = params.get('projectId') || localStorage.getItem('speakup-current-project-id') || '';
+const projectRef = getProjectById(projectId) || getCurrentProject();
+const projectName = params.get('project') || projectRef?.name || '오늘의 말하기 연습';
 const typeName = params.get('type') || 'free';
 const situationName = params.get('situation') || localStorage.getItem('speakup-practice-situation') || '';
 const goals = (params.get('goal') || '말 속도')
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
+
+if (projectRef) {
+  localStorage.setItem('speakup-current-project-id', projectRef.id);
+  localStorage.setItem('speakup-project-name', projectRef.name);
+}
 
 const SCENARIO_MAP: Record<string, string> = {
   presentation: 'presentation',
@@ -330,6 +338,7 @@ async function bootstrap() {
       const mediaId = await savePendingMedia(rec.blob, `${sessionId}.webm`, rec.blob.type || 'video/webm');
       setPendingAnalysis({
         sessionId,
+        projectId: projectRef?.id,
         project: projectName,
         goal: goals,
         type: typeName,
@@ -344,6 +353,7 @@ async function bootstrap() {
       const next = new URL('loading.html', location.href);
       next.searchParams.set('session', sessionId);
       next.searchParams.set('source', 'live');
+      if (projectRef?.id) next.searchParams.set('projectId', projectRef.id);
       next.searchParams.set('project', projectName);
       next.searchParams.set('goal', goals.join(', '));
       next.searchParams.set('type', typeName);
@@ -368,6 +378,7 @@ async function bootstrap() {
       const mediaId = await savePendingMedia(file, file.name, file.type || 'video/mp4');
       setPendingAnalysis({
         sessionId: sessionKey,
+        projectId: projectRef?.id,
         project: projectName,
         goal: goals,
         type: typeName,
@@ -382,6 +393,7 @@ async function bootstrap() {
       const next = new URL('loading.html', location.href);
       next.searchParams.set('session', sessionKey);
       next.searchParams.set('source', 'upload');
+      if (projectRef?.id) next.searchParams.set('projectId', projectRef.id);
       next.searchParams.set('project', projectName);
       next.searchParams.set('goal', goals.join(', '));
       next.searchParams.set('type', typeName);

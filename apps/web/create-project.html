@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>상황 설정 - SpeakUp</title>
+    <title>연습 준비 - SpeakUp</title>
     <script>
       const savedTheme = localStorage.getItem('speakup-theme');
       document.documentElement.dataset.theme = savedTheme || 'light';
@@ -15,150 +15,61 @@
   </head>
   <body>
     <main class="container app-shell">
-      <div class="topbar app-nav">
-        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
-          <div class="brand-badge">S</div>
-          <div class="brand-copy">
-            <strong>SpeakUp</strong>
-            <span>상황 설정</span>
+      <section class="project-shell">
+        <aside class="screen project-sidebar project-sidebar-compact">
+          <div class="project-sidebar-head">
+            <a class="brand" href="index.html" aria-label="SpeakUp 홈">
+              <div class="brand-badge">S</div>
+              <div class="brand-copy">
+                <strong>SpeakUp</strong>
+              </div>
+            </a>
+            <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
           </div>
-        </a>
-        <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
-      </div>
 
-      <section class="progress-steps" aria-label="진행 단계">
-        <span class="is-current">1 준비</span>
-        <span>2 연습</span>
-        <span>3 코칭</span>
-      </section>
+          <button id="project-create-toggle" type="button" class="btn project-create-inline">+ 새 프로젝트</button>
+          <div id="project-list" class="project-list" aria-label="프로젝트 목록"></div>
+        </aside>
 
-      <section class="setup-layout">
-        <section class="screen setup-main">
+        <section class="screen project-main project-main-simple">
+          <section class="progress-steps" aria-label="진행 단계">
+            <span class="is-current">1 상황 입력</span>
+            <span>2 포커스 선택</span>
+            <span>3 연습</span>
+          </section>
+
           <div class="page-heading">
-            <h1>오늘 어떤 말하기를 연습할까요?</h1>
-            <p>상황과 집중하고 싶은 부분을 정하면 SpeakUp이 맞춤 코칭을 준비해요.</p>
+            <h1>오늘 어떤 말하기 연습을 할까요?</h1>
+            <p id="project-context"></p>
           </div>
 
           <div class="field">
-            <label for="project-name">세션 이름</label>
-            <input id="project-name" placeholder="예: 삼성 최종 면접 준비" type="text" />
-          </div>
-
-          <div class="field">
-            <label for="practice-situation">어떤 상황을 연습하고 싶나요?</label>
+            <label for="practice-situation">연습 상황</label>
             <input id="practice-situation" type="text" />
           </div>
 
-          <div class="field">
-            <strong>집중 포커스</strong>
-            <div class="chip-group" id="focus-chip-group">
-              <label class="chip"><input type="checkbox" value="말 속도" /><span class="chip-check">✓</span>말 속도</label>
-              <label class="chip"><input type="checkbox" value="시선 처리" /><span class="chip-check">✓</span>시선 처리</label>
-              <label class="chip"><input type="checkbox" value="필러 표현" /><span class="chip-check">✓</span>필러 표현</label>
-              <label class="chip"><input type="checkbox" value="논리 흐름" /><span class="chip-check">✓</span>논리 흐름</label>
-              <label class="chip"><input type="checkbox" value="목소리 톤" /><span class="chip-check">✓</span>목소리 톤</label>
-              <label class="chip"><input type="checkbox" value="자신감" /><span class="chip-check">✓</span>자신감</label>
-            </div>
-          </div>
-
           <div class="actions vertical">
-            <button id="btn-go" class="btn btn-primary">연습 시작하기</button>
+            <button id="btn-next" class="btn btn-primary">다음</button>
           </div>
         </section>
-
-        <aside class="side-panel">
-          <section class="card session-summary">
-            <h2>세션 요약</h2>
-            <dl>
-              <div><dt>이름</dt><dd data-summary-name>—</dd></div>
-              <div><dt>상황</dt><dd data-summary-type>—</dd></div>
-              <div><dt>포커스</dt><dd data-summary-focus>—</dd></div>
-              <div><dt>예상 시간</dt><dd>5분</dd></div>
-            </dl>
-          </section>
-          <section class="card tip-card">
-            <h2>오늘의 팁</h2>
-            <p data-tip>처음 10초는 천천히 시작해보세요. 시작 속도가 전체 리듬을 만들어줘요.</p>
-          </section>
-        </aside>
       </section>
     </main>
 
-    <script>
-      const themeToggle = document.querySelector('[data-theme-toggle]');
-      const focusChipGroup = document.getElementById('focus-chip-group');
-      const projectName = document.getElementById('project-name');
-      const situationInput = document.getElementById('practice-situation');
-      const summaryName = document.querySelector('[data-summary-name]');
-      const summaryType = document.querySelector('[data-summary-type]');
-      const summaryFocus = document.querySelector('[data-summary-focus]');
-      const tip = document.querySelector('[data-tip]');
-      const situationExamples = [
-        '캡스톤 최종 발표',
-        '창업 경진대회 발표',
-        '교수님 면담',
-        '대기업 면접',
-      ];
-      const savedSituation = localStorage.getItem('speakup-practice-situation') || '';
-      const situationTip = '실제 말하게 될 장면을 떠올리며 적으면 리허설이 더 자연스러워져요.';
+    <div id="project-modal" class="modal-backdrop" hidden>
+      <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
+        <div class="page-heading">
+          <h2 id="project-modal-title">새 프로젝트 만들기</h2>
+        </div>
+        <form id="project-create-form" class="project-modal-form">
+          <input id="project-create-input" type="text" placeholder="프로젝트 이름 입력" />
+          <div class="modal-actions">
+            <button id="project-cancel" type="button" class="btn btn-ghost">취소</button>
+            <button type="submit" class="btn btn-primary">생성</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
-      if (!savedSituation) {
-        const randomExample = situationExamples[Math.floor(Math.random() * situationExamples.length)];
-        situationInput.placeholder = randomExample;
-      } else {
-        situationInput.value = savedSituation;
-      }
-
-      function syncThemeToggle() {
-        const theme = document.documentElement.dataset.theme || 'light';
-        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
-        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
-      }
-
-      themeToggle.addEventListener('click', () => {
-        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.theme = nextTheme;
-        localStorage.setItem('speakup-theme', nextTheme);
-        syncThemeToggle();
-      });
-
-      function getSelectedFocus() {
-        return Array.from(focusChipGroup.querySelectorAll('input:checked')).map((input) => input.value);
-      }
-
-      function renderSelectedFocus() {
-        focusChipGroup.querySelectorAll('.chip').forEach((label) => {
-          const input = label.querySelector('input');
-          label.classList.toggle('is-selected', input.checked);
-        });
-        updateSummary();
-      }
-
-      function updateSummary() {
-        const focus = getSelectedFocus();
-        summaryName.textContent = projectName.value.trim() || '—';
-        summaryType.textContent = situationInput.value.trim() || '—';
-        summaryFocus.textContent = focus.length ? focus.join(', ') : '—';
-        tip.textContent = situationTip;
-        localStorage.setItem('speakup-practice-situation', situationInput.value.trim());
-      }
-
-      projectName.addEventListener('input', updateSummary);
-      situationInput.addEventListener('input', updateSummary);
-      focusChipGroup.addEventListener('change', renderSelectedFocus);
-
-      document.getElementById('btn-go').addEventListener('click', () => {
-        const name = encodeURIComponent(projectName.value.trim() || '오늘의 말하기 연습');
-        const situation = situationInput.value.trim() || situationInput.placeholder || '자유 연습';
-        localStorage.setItem('speakup-practice-situation', situation);
-        const scenario = encodeURIComponent('presentation');
-        const goal = encodeURIComponent(getSelectedFocus().join(', ') || '말 속도');
-        location.href = `practice.html?project=${name}&type=free&scenario=${scenario}&situation=${encodeURIComponent(situation)}&goal=${goal}`;
-      });
-
-      syncThemeToggle();
-      renderSelectedFocus();
-      updateSummary();
-    </script>
+    <script type="module" src="/src/project-hub.ts"></script>
   </body>
 </html>

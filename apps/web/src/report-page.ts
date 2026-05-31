@@ -354,6 +354,7 @@ async function render() {
   }
   if (retryLink) {
     const next = new URL('practice.html', location.href);
+    if (session.projectId) next.searchParams.set('projectId', session.projectId);
     next.searchParams.set('project', session.project);
     next.searchParams.set('goal', goalText);
     next.searchParams.set('type', session.type);
