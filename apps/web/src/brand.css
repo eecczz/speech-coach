@@ -1032,10 +1032,10 @@ button.btn-primary {
   gap: 10px;
   align-items: start;
   padding: 12px 14px;
-  border: 0.5px solid var(--border);
+  border: 0.5px solid rgba(110, 124, 149, 0.18);
   border-radius: var(--radius-md);
   background: var(--card);
-  box-shadow: 0 1px 6px rgba(46, 44, 58, 0.04);
+  box-shadow: 0 4px 12px rgba(46, 44, 58, 0.045);
 }
 
 .loading-copy {
@@ -1057,15 +1057,16 @@ button.btn-primary {
 }
 
 .step-state {
-  color: var(--ink-ghost);
+  color: rgba(113, 124, 144, 0.7);
   font-size: 0.9rem;
   line-height: 1.2;
   padding-top: 1px;
 }
 
 .loading-step.is-current {
-  border-color: var(--accent);
-  background: var(--card-strong);
+  border-color: rgba(126, 161, 224, 0.42);
+  background: rgba(243, 246, 252, 0.96);
+  box-shadow: 0 6px 16px rgba(46, 44, 58, 0.06);
 }
 
 .loading-step.is-current .step-state,
@@ -1074,47 +1075,49 @@ button.btn-primary {
 }
 
 .loading-step.is-current .loading-copy strong {
-  font-weight: 600;
+  font-weight: 620;
 }
 
 .loading-step.is-current .loading-copy p {
-  color: var(--ink);
+  color: rgba(63, 70, 84, 0.88);
   opacity: 1;
 }
 
 .loading-step.is-current .step-state {
-  color: var(--accent);
+  color: rgba(110, 148, 216, 0.96);
 }
 
 .loading-step.is-complete .step-state {
-  color: var(--positive);
+  color: rgba(88, 155, 131, 0.92);
 }
 
 .loading-step.is-complete {
-  background: var(--bg-soft);
-  border-color: var(--border-strong);
+  background: rgba(236, 243, 240, 0.94);
+  border-color: rgba(129, 160, 149, 0.28);
+  box-shadow: 0 4px 12px rgba(46, 44, 58, 0.04);
 }
 
 .loading-step.is-complete .loading-copy strong {
-  color: var(--ink);
-  font-weight: 550;
+  color: rgba(43, 45, 51, 0.92);
+  font-weight: 580;
 }
 
 .loading-step.is-complete .loading-copy p {
-  color: var(--ink-muted);
+  color: rgba(99, 109, 124, 0.82);
 }
 
 .loading-step.is-pending {
-  opacity: 0.82;
-  border-color: var(--border-strong);
+  opacity: 0.94;
+  border-color: rgba(119, 133, 156, 0.2);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .loading-step.is-pending .loading-copy strong {
-  color: var(--ink-muted);
+  color: rgba(86, 94, 108, 0.88);
 }
 
 .loading-step.is-pending .loading-copy p {
-  color: var(--ink-faint);
+  color: rgba(120, 129, 144, 0.88);
 }
 
 .loading-note {
