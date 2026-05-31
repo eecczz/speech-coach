@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>연습 준비 - SpeakUp</title>
+    <title>세션 시작 - SpeakUp</title>
     <script>
       const savedTheme = localStorage.getItem('speakup-theme');
       document.documentElement.dataset.theme = savedTheme || 'light';
@@ -13,63 +13,373 @@
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="stylesheet" href="/src/brand.css" />
   </head>
-  <body>
-    <main class="container app-shell">
-      <section class="project-shell">
-        <aside class="screen project-sidebar project-sidebar-compact">
-          <div class="project-sidebar-head">
-            <a class="brand" href="index.html" aria-label="SpeakUp 홈">
-              <div class="brand-badge">S</div>
-              <div class="brand-copy">
-                <strong>SpeakUp</strong>
-              </div>
-            </a>
-            <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+  <body class="session-setup-page">
+    <main class="session-setup-shell">
+      <nav class="session-setup-nav">
+        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy">
+            <strong>SpeakUp</strong>
+            <span>AI agent 세션 준비</span>
           </div>
+        </a>
+        <div class="session-user-chip" id="user-chip">로그인이 필요합니다</div>
+        <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+      </nav>
 
-          <button id="project-create-toggle" type="button" class="btn project-create-inline">+ 새 프로젝트</button>
-          <div id="project-list" class="project-list" aria-label="프로젝트 목록"></div>
-        </aside>
+      <section class="session-choice" aria-label="세션 시작 방식">
+        <button type="button" class="btn btn-primary" data-mode-choice="new">세션 시작하기</button>
+        <button type="button" class="btn btn-ghost" data-mode-choice="existing">기존 세션으로 시작하기</button>
+      </section>
 
-        <section class="screen project-main project-main-simple">
-          <section class="progress-steps" aria-label="진행 단계">
-            <span class="is-current">1 상황 입력</span>
-            <span>2 포커스 선택</span>
-            <span>3 연습</span>
-          </section>
-
-          <div class="page-heading">
-            <h1>오늘 어떤 말하기 연습을 할까요?</h1>
-            <p id="project-context"></p>
+      <section class="session-wizard-card" aria-live="polite">
+        <div class="wizard-header">
+          <div>
+            <span class="eyebrow">AI Agent Session</span>
+            <h1 id="wizard-title">로그인하고 세션을 준비하세요</h1>
+            <p id="wizard-copy">세션을 저장하고 이어서 연습하려면 먼저 계정을 확인합니다.</p>
           </div>
-
-          <div class="field">
-            <label for="practice-situation">연습 상황</label>
-            <input id="practice-situation" type="text" />
+          <div class="wizard-steps" aria-label="세션 준비 단계">
+            <span class="is-current" data-step-pill="0">계정</span>
+            <span data-step-pill="1">세션</span>
+            <span data-step-pill="2">포커스</span>
           </div>
+        </div>
 
-          <div class="actions vertical">
-            <button id="btn-next" class="btn btn-primary">다음</button>
+        <section class="wizard-panel is-active" data-step="0">
+          <div class="auth-grid">
+            <label class="field">
+              <span>이름</span>
+              <input id="display-name" type="text" placeholder="박진수" autocomplete="name" />
+            </label>
+            <label class="field">
+              <span>이메일</span>
+              <input id="email" type="email" placeholder="you@example.com" autocomplete="email" />
+            </label>
+            <label class="field">
+              <span>비밀번호</span>
+              <input id="password" type="password" placeholder="4자 이상" autocomplete="current-password" />
+            </label>
+          </div>
+          <div class="wizard-actions">
+            <button type="button" class="btn btn-ghost" id="login-btn">로그인</button>
+            <button type="button" class="btn btn-primary" id="signup-btn">회원가입 후 계속</button>
           </div>
         </section>
+
+        <section class="wizard-panel" data-step="1">
+          <label class="field">
+            <span>세션 명</span>
+            <input id="project-name" type="text" placeholder="예: 최종 면접 1차 리허설" />
+          </label>
+          <input id="presentation-type" class="sr-select" value="presentation" />
+          <div class="scenario-grid compact" data-scenario-grid>
+            <button type="button" class="scenario-card is-selected" data-value="presentation"><i class="ti ti-presentation"></i><strong>발표</strong><span>청중 앞 전달력</span></button>
+            <button type="button" class="scenario-card" data-value="interview"><i class="ti ti-briefcase"></i><strong>면접</strong><span>답변 자신감</span></button>
+            <button type="button" class="scenario-card" data-value="negotiation"><i class="ti ti-handshake"></i><strong>협상</strong><span>근거와 톤</span></button>
+            <button type="button" class="scenario-card" data-value="daily"><i class="ti ti-message-circle"></i><strong>일상 대화</strong><span>편안한 흐름</span></button>
+            <button type="button" class="scenario-card" data-value="online"><i class="ti ti-device-laptop"></i><strong>전화·온라인</strong><span>비대면 집중감</span></button>
+            <button type="button" class="scenario-card" data-value="free"><i class="ti ti-sparkles"></i><strong>자유 연습</strong><span>오늘 필요한 말</span></button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-step="2">
+          <div class="focus-intro">
+            <strong>집중 포커스</strong>
+            <p>선택한 항목만 실시간 HUD와 AI agent 코칭에 노출됩니다. 하나 이상 선택해야 세션을 시작할 수 있습니다.</p>
+          </div>
+          <div class="chip-group focus-grid" id="focus-chip-group">
+            <label class="chip"><input type="checkbox" value="말 속도" />말 속도</label>
+            <label class="chip"><input type="checkbox" value="시선 처리" />시선 처리</label>
+            <label class="chip"><input type="checkbox" value="필러 표현" />필러 표현</label>
+            <label class="chip"><input type="checkbox" value="침묵 구간" />침묵 구간</label>
+            <label class="chip"><input type="checkbox" value="자세" />자세</label>
+            <label class="chip"><input type="checkbox" value="표정" />표정</label>
+            <label class="chip"><input type="checkbox" value="제스처" />제스처</label>
+            <label class="chip"><input type="checkbox" value="논리 흐름" />논리 흐름</label>
+            <label class="chip"><input type="checkbox" value="목소리 톤" />목소리 톤</label>
+            <label class="chip"><input type="checkbox" value="자신감" />자신감</label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-step="existing">
+          <div class="existing-head">
+            <strong>기존 세션 선택</strong>
+            <p>로그인한 계정의 세션을 불러와 같은 맥락으로 이어서 연습합니다.</p>
+          </div>
+          <select id="existing-session-select" class="existing-select"></select>
+          <div id="existing-session-detail" class="existing-session-detail">저장된 세션을 불러오는 중입니다.</div>
+        </section>
+
+        <p class="wizard-error" id="wizard-error"></p>
+        <div class="wizard-footer">
+          <button type="button" class="btn btn-ghost" id="prev-step">이전</button>
+          <button type="button" class="btn btn-primary" id="start-session" hidden>다음</button>
+        </div>
       </section>
     </main>
 
-    <div id="project-modal" class="modal-backdrop" hidden>
-      <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
-        <div class="page-heading">
-          <h2 id="project-modal-title">새 프로젝트 만들기</h2>
-        </div>
-        <form id="project-create-form" class="project-modal-form">
-          <input id="project-create-input" type="text" placeholder="프로젝트 이름 입력" />
-          <div class="modal-actions">
-            <button id="project-cancel" type="button" class="btn btn-ghost">취소</button>
-            <button type="submit" class="btn btn-primary">생성</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <script type="module">
+      import { getActiveUser, listRemoteSessions, loginUser, saveRemoteSession, setActiveUser, signupUser } from '/src/app-api.ts';
 
-    <script type="module" src="/src/project-hub.ts"></script>
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const userChip = document.getElementById('user-chip');
+      const panels = [...document.querySelectorAll('[data-step]')];
+      const pills = [...document.querySelectorAll('[data-step-pill]')];
+      const title = document.getElementById('wizard-title');
+      const copy = document.getElementById('wizard-copy');
+      const error = document.getElementById('wizard-error');
+      const prevBtn = document.getElementById('prev-step');
+      const startBtn = document.getElementById('start-session');
+      const projectName = document.getElementById('project-name');
+      const typeInput = document.getElementById('presentation-type');
+      const focusGroup = document.getElementById('focus-chip-group');
+      const existingSelect = document.getElementById('existing-session-select');
+      const existingDetail = document.getElementById('existing-session-detail');
+      const emailInput = document.getElementById('email');
+      const passwordInput = document.getElementById('password');
+      const displayNameInput = document.getElementById('display-name');
+
+      const labels = { presentation: '발표', interview: '면접', negotiation: '협상', daily: '일상 대화', online: '전화·온라인', free: '자유 연습' };
+      const scenarioMap = { presentation: 'presentation', interview: 'interview', negotiation: 'presentation', daily: 'casual', online: 'presentation', free: 'presentation' };
+      let mode = new URLSearchParams(location.search).get('mode') === 'existing' ? 'existing' : 'new';
+      let step = getActiveUser() ? 1 : 0;
+      let activeUser = getActiveUser();
+      let existingSessions = [];
+      const LAST_NEW_STEP = 2;
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
+      function setError(message = '') {
+        error.textContent = message;
+      }
+
+      function getSelectedFocus() {
+        return [...focusGroup.querySelectorAll('input:checked')].map((input) => input.value);
+      }
+
+      function syncFocus() {
+        focusGroup.querySelectorAll('.chip').forEach((chip) => {
+          chip.classList.toggle('is-selected', chip.querySelector('input').checked);
+        });
+      }
+
+      function syncModeButtons() {
+        document.querySelectorAll('[data-mode-choice]').forEach((button) => {
+          const active = button.dataset.modeChoice === mode;
+          button.classList.toggle('btn-primary', active);
+          button.classList.toggle('btn-ghost', !active);
+        });
+      }
+
+      function currentPanelKey() {
+        if (!activeUser) return '0';
+        return mode === 'existing' ? 'existing' : String(step);
+      }
+
+      function render() {
+        const key = currentPanelKey();
+        if (!activeUser) mode = 'new';
+        panels.forEach((panel) => panel.classList.toggle('is-active', panel.dataset.step === key));
+        pills.forEach((pill) => pill.classList.toggle('is-current', Number(pill.dataset.stepPill) === step && mode === 'new'));
+        userChip.textContent = activeUser ? `${activeUser.display_name} · ${activeUser.email}` : '로그인이 필요합니다';
+        const titles = {
+          0: ['로그인하고 세션을 준비하세요', '계정 기준으로 세션과 리포트를 저장합니다.'],
+          1: ['세션에서 할 연습을 정하세요', '세션 이름과 연습 종류를 정하면 그 기준으로 실시간 코칭과 리포트가 만들어집니다.'],
+          2: ['실시간 집중 포커스를 선택하세요', '선택한 항목만 AI agent가 우선적으로 관찰하고 코칭합니다.'],
+          existing: ['기존 세션으로 이어서 시작하세요', '이전 목표와 포커스를 가져와 같은 흐름으로 연습합니다.'],
+        };
+        const [nextTitle, nextCopy] = titles[key];
+        title.textContent = nextTitle;
+        copy.textContent = nextCopy;
+        prevBtn.hidden = key === '0';
+        startBtn.hidden = key === '0';
+        startBtn.textContent = mode === 'existing' ? '선택한 세션 시작' : step < LAST_NEW_STEP ? '다음' : '세션 시작';
+      }
+
+      async function ensureUser(action) {
+        setError('');
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+        if (!email || !password) {
+          setError('이메일과 비밀번호를 입력하세요.');
+          return;
+        }
+        try {
+          activeUser = action === 'signup'
+            ? await signupUser(email, password, displayNameInput.value.trim() || email.split('@')[0])
+            : await loginUser(email, password);
+          setActiveUser(activeUser);
+          step = 1;
+          await loadExistingSessions();
+          render();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '로그인 처리에 실패했습니다.');
+        }
+      }
+
+      function validateStep() {
+        if (!activeUser) {
+          setError('먼저 로그인하거나 회원가입하세요.');
+          return false;
+        }
+        if (step === 1 && !projectName.value.trim()) {
+          setError('세션 명을 입력하세요.');
+          return false;
+        }
+        if (step === LAST_NEW_STEP && getSelectedFocus().length === 0) {
+          setError('집중 포커스를 하나 이상 선택해야 합니다.');
+          return false;
+        }
+        setError('');
+        return true;
+      }
+
+      async function loadExistingSessions() {
+        if (!activeUser) return;
+        try {
+          existingSessions = await listRemoteSessions(activeUser.id);
+          existingSelect.textContent = '';
+          if (existingSessions.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = '저장된 세션이 없습니다';
+            existingSelect.appendChild(option);
+          } else {
+            existingSessions.forEach((session) => {
+              const option = document.createElement('option');
+              option.value = session.id;
+              option.textContent = `${session.title} · ${labels[session.scenario] || session.scenario}`;
+              existingSelect.appendChild(option);
+            });
+          }
+          renderExistingDetail();
+        } catch {
+          existingSessions = [];
+          existingSelect.textContent = '';
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = '세션을 불러오지 못했습니다';
+          existingSelect.appendChild(option);
+          existingDetail.textContent = 'PostgreSQL API 연결을 확인하세요.';
+        }
+      }
+
+      function renderExistingDetail() {
+        const selected = existingSessions.find((session) => session.id === existingSelect.value);
+        if (!selected) {
+          existingDetail.textContent = '선택할 수 있는 기존 세션이 없습니다.';
+          return;
+        }
+        existingDetail.textContent = '';
+        const title = document.createElement('strong');
+        title.textContent = selected.title;
+        const scenario = document.createElement('span');
+        scenario.textContent = labels[selected.scenario] || selected.scenario;
+        const focus = document.createElement('em');
+        focus.textContent = selected.focus_goals.join(', ') || '포커스 없음';
+        existingDetail.append(title, scenario, focus);
+      }
+
+      async function startSession() {
+        if (!activeUser) {
+          setError('로그인이 필요합니다.');
+          return;
+        }
+        setError('');
+        if (mode === 'new' && step < LAST_NEW_STEP) {
+          if (!validateStep()) return;
+          step += 1;
+          render();
+          return;
+        }
+        try {
+          let session;
+          if (mode === 'existing') {
+            session = existingSessions.find((item) => item.id === existingSelect.value);
+            if (!session) {
+              setError('이어갈 세션을 선택하세요.');
+              return;
+            }
+          } else {
+            if (!validateStep()) return;
+            session = await saveRemoteSession({
+              user_id: activeUser.id,
+              title: projectName.value.trim(),
+              scenario: typeInput.value,
+              situation: projectName.value.trim(),
+              focus_goals: getSelectedFocus(),
+              source: 'live',
+              status: 'ready',
+            });
+          }
+          const focus = session.focus_goals.join(', ');
+          const scenario = scenarioMap[session.scenario] || 'presentation';
+          const url = new URL('practice.html', location.href);
+          url.searchParams.set('sessionId', session.id);
+          url.searchParams.set('project', session.title);
+          url.searchParams.set('type', session.scenario);
+          url.searchParams.set('scenario', scenario);
+          url.searchParams.set('goal', focus);
+          location.href = url.toString();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '세션 생성에 실패했습니다.');
+        }
+      }
+
+      document.getElementById('login-btn').addEventListener('click', () => ensureUser('login'));
+      document.getElementById('signup-btn').addEventListener('click', () => ensureUser('signup'));
+      prevBtn.addEventListener('click', () => {
+        if (mode === 'existing') {
+          mode = 'new';
+          step = activeUser ? 1 : 0;
+        } else {
+          step = Math.max(activeUser ? 1 : 0, step - 1);
+        }
+        setError('');
+        render();
+      });
+      startBtn.addEventListener('click', startSession);
+      existingSelect.addEventListener('change', renderExistingDetail);
+      focusGroup.addEventListener('change', syncFocus);
+
+      document.querySelectorAll('[data-mode-choice]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          mode = button.dataset.modeChoice;
+          if (mode === 'existing') {
+            await loadExistingSessions();
+          } else {
+            step = activeUser ? 1 : 0;
+          }
+          syncModeButtons();
+          setError('');
+          render();
+        });
+      });
+
+      document.querySelectorAll('[data-scenario-grid] .scenario-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          document.querySelectorAll('.scenario-card').forEach((item) => item.classList.remove('is-selected'));
+          card.classList.add('is-selected');
+          typeInput.value = card.dataset.value;
+        });
+      });
+
+      syncThemeToggle();
+      syncFocus();
+      syncModeButtons();
+      void loadExistingSessions();
+      render();
+    </script>
   </body>
 </html>

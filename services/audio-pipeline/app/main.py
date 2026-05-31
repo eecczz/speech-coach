@@ -15,13 +15,24 @@ import tempfile
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile
+import psycopg
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
 from prosody import analyze_prosody
 from stt import STT
+from db import (
+    DatabaseUnavailable,
+    authenticate_user,
+    create_user,
+    init_db,
+    list_messages,
+    list_sessions,
+    save_message,
+    upsert_session,
+)
 
 app = FastAPI(title="Presentation Coach Audio Pipeline")
 
@@ -34,6 +45,40 @@ stt = STT(
     jeonbuk_base_url=os.environ.get("JEONBUK_BASE_URL", "https://ai.jb.go.kr/student-api/v1"),
     jeonbuk_api_key=os.environ.get("JEONBUK_API_KEY"),
 )
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    try:
+        init_db()
+    except Exception as e:
+        # The media/STT pipeline can still run without DB during local debugging.
+        print(f"[db] init skipped: {type(e).__name__}: {e}", flush=True)
+
+
+def _require_text(payload: dict, key: str, label: str) -> str:
+    value = str(payload.get(key) or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{label} is required")
+    return value
+
+
+async def _json_payload(request: Request) -> dict:
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="JSON object required")
+    return payload
+
+
+def _db_error_response(error: Exception) -> JSONResponse:
+    if isinstance(error, DatabaseUnavailable):
+        return JSONResponse({"error": str(error)}, status_code=503)
+    if isinstance(error, psycopg.errors.UniqueViolation):
+        return JSONResponse({"error": "already exists"}, status_code=409)
+    return JSONResponse({"error": f"{type(error).__name__}: {error}"}, status_code=500)
 
 
 def _webm_to_wav(src: str, dst: str) -> None:
@@ -73,6 +118,103 @@ def _video_to_mp4(src: str, dst: str) -> None:
 def _safe_download_stem(filename: str | None) -> str:
     stem = Path(filename or "speakup-video").stem.strip() or "speakup-video"
     return "".join("_" if c in '\\/:*?"<>|' else c for c in stem)
+
+
+@app.get("/api/health/db")
+async def db_health():
+    try:
+        init_db()
+        return {"ok": True}
+    except Exception as e:
+        return _db_error_response(e)
+
+
+@app.post("/api/auth/signup")
+async def signup(request: Request):
+    payload = await _json_payload(request)
+    email = _require_text(payload, "email", "email")
+    password = _require_text(payload, "password", "password")
+    display_name = str(payload.get("display_name") or email.split("@")[0]).strip()
+    if len(password) < 4:
+        raise HTTPException(status_code=400, detail="password must be at least 4 characters")
+    try:
+        return {"user": create_user(email, password, display_name)}
+    except Exception as e:
+        return _db_error_response(e)
+
+
+@app.post("/api/auth/login")
+async def login(request: Request):
+    payload = await _json_payload(request)
+    email = _require_text(payload, "email", "email")
+    password = _require_text(payload, "password", "password")
+    try:
+        user = authenticate_user(email, password)
+    except Exception as e:
+        return _db_error_response(e)
+    if not user:
+        raise HTTPException(status_code=401, detail="invalid email or password")
+    return {"user": user}
+
+
+@app.get("/api/sessions")
+async def api_list_sessions(user_id: str):
+    try:
+        return {"sessions": list_sessions(user_id)}
+    except Exception as e:
+        return _db_error_response(e)
+
+
+@app.post("/api/sessions")
+async def api_create_session(request: Request):
+    payload = await _json_payload(request)
+    for key in ("user_id", "title", "scenario"):
+        _require_text(payload, key, key)
+    try:
+        return {"session": upsert_session(payload)}
+    except Exception as e:
+        return _db_error_response(e)
+
+
+@app.patch("/api/sessions/{session_id}")
+async def api_update_session(session_id: str, request: Request):
+    payload = await _json_payload(request)
+    payload["id"] = session_id
+    for key in ("user_id", "title", "scenario"):
+        _require_text(payload, key, key)
+    try:
+        return {"session": upsert_session(payload)}
+    except Exception as e:
+        return _db_error_response(e)
+
+
+@app.get("/api/sessions/{session_id}/messages")
+async def api_list_messages(session_id: str):
+    try:
+        return {"messages": list_messages(session_id)}
+    except Exception as e:
+        return _db_error_response(e)
+
+
+@app.post("/api/sessions/{session_id}/messages")
+async def api_save_message(session_id: str, request: Request):
+    payload = await _json_payload(request)
+    role = _require_text(payload, "role", "role")
+    content = _require_text(payload, "content", "content")
+    t = payload.get("t")
+    numeric_t = float(t) if isinstance(t, (int, float)) else None
+    try:
+        return {
+            "message": save_message(
+                session_id=session_id,
+                role=role,
+                content=content,
+                t=numeric_t,
+                metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+            )
+        }
+    except Exception as e:
+        return _db_error_response(e)
 
 
 def _to_stt_segments(whisper_segments: list) -> list[dict]:

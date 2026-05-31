@@ -3,74 +3,123 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>연습 준비 - SpeakUp</title>
+    <title>세션 시작 - SpeakUp</title>
     <script>
       const savedTheme = localStorage.getItem('speakup-theme');
       document.documentElement.dataset.theme = savedTheme || 'light';
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
-    <script type="module" crossorigin src="/assets/createProject-DedSQUgo.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/session-store-D6T-j3PH.js">
-    <link rel="modulepreload" crossorigin href="/assets/project-store-62FOwKO7.js">
-    <link rel="stylesheet" crossorigin href="/assets/brand-CyYJ1Jet.css">
+    <script type="module" crossorigin src="/assets/createProject-DCq2axfd.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-EeOZK34R.js">
+    <link rel="modulepreload" crossorigin href="/assets/app-api-ByfmuPg5.js">
+    <link rel="stylesheet" crossorigin href="/assets/brand-Q0gL8nvS.css">
   </head>
-  <body>
-    <main class="container app-shell">
-      <section class="project-shell">
-        <aside class="screen project-sidebar project-sidebar-compact">
-          <div class="project-sidebar-head">
-            <a class="brand" href="index.html" aria-label="SpeakUp 홈">
-              <div class="brand-badge">S</div>
-              <div class="brand-copy">
-                <strong>SpeakUp</strong>
-              </div>
-            </a>
-            <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+  <body class="session-setup-page">
+    <main class="session-setup-shell">
+      <nav class="session-setup-nav">
+        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy">
+            <strong>SpeakUp</strong>
+            <span>AI agent 세션 준비</span>
           </div>
+        </a>
+        <div class="session-user-chip" id="user-chip">로그인이 필요합니다</div>
+        <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+      </nav>
 
-          <button id="project-create-toggle" type="button" class="btn project-create-inline">+ 새 프로젝트</button>
-          <div id="project-list" class="project-list" aria-label="프로젝트 목록"></div>
-        </aside>
+      <section class="session-choice" aria-label="세션 시작 방식">
+        <button type="button" class="btn btn-primary" data-mode-choice="new">세션 시작하기</button>
+        <button type="button" class="btn btn-ghost" data-mode-choice="existing">기존 세션으로 시작하기</button>
+      </section>
 
-        <section class="screen project-main project-main-simple">
-          <section class="progress-steps" aria-label="진행 단계">
-            <span class="is-current">1 상황 입력</span>
-            <span>2 포커스 선택</span>
-            <span>3 연습</span>
-          </section>
-
-          <div class="page-heading">
-            <h1>오늘 어떤 말하기 연습을 할까요?</h1>
-            <p id="project-context"></p>
+      <section class="session-wizard-card" aria-live="polite">
+        <div class="wizard-header">
+          <div>
+            <span class="eyebrow">AI Agent Session</span>
+            <h1 id="wizard-title">로그인하고 세션을 준비하세요</h1>
+            <p id="wizard-copy">세션을 저장하고 이어서 연습하려면 먼저 계정을 확인합니다.</p>
           </div>
-
-          <div class="field">
-            <label for="practice-situation">연습 상황</label>
-            <input id="practice-situation" type="text" />
+          <div class="wizard-steps" aria-label="세션 준비 단계">
+            <span class="is-current" data-step-pill="0">계정</span>
+            <span data-step-pill="1">세션</span>
+            <span data-step-pill="2">포커스</span>
           </div>
+        </div>
 
-          <div class="actions vertical">
-            <button id="btn-next" class="btn btn-primary">다음</button>
+        <section class="wizard-panel is-active" data-step="0">
+          <div class="auth-grid">
+            <label class="field">
+              <span>이름</span>
+              <input id="display-name" type="text" placeholder="박진수" autocomplete="name" />
+            </label>
+            <label class="field">
+              <span>이메일</span>
+              <input id="email" type="email" placeholder="you@example.com" autocomplete="email" />
+            </label>
+            <label class="field">
+              <span>비밀번호</span>
+              <input id="password" type="password" placeholder="4자 이상" autocomplete="current-password" />
+            </label>
+          </div>
+          <div class="wizard-actions">
+            <button type="button" class="btn btn-ghost" id="login-btn">로그인</button>
+            <button type="button" class="btn btn-primary" id="signup-btn">회원가입 후 계속</button>
           </div>
         </section>
+
+        <section class="wizard-panel" data-step="1">
+          <label class="field">
+            <span>세션 명</span>
+            <input id="project-name" type="text" placeholder="예: 최종 면접 1차 리허설" />
+          </label>
+          <input id="presentation-type" class="sr-select" value="presentation" />
+          <div class="scenario-grid compact" data-scenario-grid>
+            <button type="button" class="scenario-card is-selected" data-value="presentation"><i class="ti ti-presentation"></i><strong>발표</strong><span>청중 앞 전달력</span></button>
+            <button type="button" class="scenario-card" data-value="interview"><i class="ti ti-briefcase"></i><strong>면접</strong><span>답변 자신감</span></button>
+            <button type="button" class="scenario-card" data-value="negotiation"><i class="ti ti-handshake"></i><strong>협상</strong><span>근거와 톤</span></button>
+            <button type="button" class="scenario-card" data-value="daily"><i class="ti ti-message-circle"></i><strong>일상 대화</strong><span>편안한 흐름</span></button>
+            <button type="button" class="scenario-card" data-value="online"><i class="ti ti-device-laptop"></i><strong>전화·온라인</strong><span>비대면 집중감</span></button>
+            <button type="button" class="scenario-card" data-value="free"><i class="ti ti-sparkles"></i><strong>자유 연습</strong><span>오늘 필요한 말</span></button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-step="2">
+          <div class="focus-intro">
+            <strong>집중 포커스</strong>
+            <p>선택한 항목만 실시간 HUD와 AI agent 코칭에 노출됩니다. 하나 이상 선택해야 세션을 시작할 수 있습니다.</p>
+          </div>
+          <div class="chip-group focus-grid" id="focus-chip-group">
+            <label class="chip"><input type="checkbox" value="말 속도" />말 속도</label>
+            <label class="chip"><input type="checkbox" value="시선 처리" />시선 처리</label>
+            <label class="chip"><input type="checkbox" value="필러 표현" />필러 표현</label>
+            <label class="chip"><input type="checkbox" value="침묵 구간" />침묵 구간</label>
+            <label class="chip"><input type="checkbox" value="자세" />자세</label>
+            <label class="chip"><input type="checkbox" value="표정" />표정</label>
+            <label class="chip"><input type="checkbox" value="제스처" />제스처</label>
+            <label class="chip"><input type="checkbox" value="논리 흐름" />논리 흐름</label>
+            <label class="chip"><input type="checkbox" value="목소리 톤" />목소리 톤</label>
+            <label class="chip"><input type="checkbox" value="자신감" />자신감</label>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-step="existing">
+          <div class="existing-head">
+            <strong>기존 세션 선택</strong>
+            <p>로그인한 계정의 세션을 불러와 같은 맥락으로 이어서 연습합니다.</p>
+          </div>
+          <select id="existing-session-select" class="existing-select"></select>
+          <div id="existing-session-detail" class="existing-session-detail">저장된 세션을 불러오는 중입니다.</div>
+        </section>
+
+        <p class="wizard-error" id="wizard-error"></p>
+        <div class="wizard-footer">
+          <button type="button" class="btn btn-ghost" id="prev-step">이전</button>
+          <button type="button" class="btn btn-primary" id="start-session" hidden>다음</button>
+        </div>
       </section>
     </main>
-
-    <div id="project-modal" class="modal-backdrop" hidden>
-      <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
-        <div class="page-heading">
-          <h2 id="project-modal-title">새 프로젝트 만들기</h2>
-        </div>
-        <form id="project-create-form" class="project-modal-form">
-          <input id="project-create-input" type="text" placeholder="프로젝트 이름 입력" />
-          <div class="modal-actions">
-            <button id="project-cancel" type="button" class="btn btn-ghost">취소</button>
-            <button type="submit" class="btn btn-primary">생성</button>
-          </div>
-        </form>
-      </div>
-    </div>
 
   </body>
 </html>

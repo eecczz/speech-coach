@@ -9,6 +9,7 @@ import {
   saveCompletedSession,
 } from './session-store';
 import { analyzeUploadedVideo } from './upload-analyze';
+import { getActiveUser, saveRemoteSession } from './app-api';
 import { createAggregatorClient, finalizeSession } from './ws/client';
 
 type StepState = 'is-pending' | 'is-current' | 'is-complete';
@@ -172,6 +173,22 @@ async function run() {
       filename: pending.filename,
       mimeType: pending.mimeType,
     });
+    const activeUser = getActiveUser();
+    if (activeUser) {
+      await saveRemoteSession({
+        id: pending.sessionId,
+        user_id: activeUser.id,
+        title: pending.project,
+        scenario: pending.type,
+        situation: pending.situation || pending.project,
+        focus_goals: pending.goal,
+        source: pending.source,
+        status: 'completed',
+        last_report: report,
+      }).catch((error) => {
+        console.warn('[loading] remote session save failed', error);
+      });
+    }
     touchProject(pending.projectId);
     clearPendingAnalysis();
     showPhase('done', pending.source);

@@ -140,9 +140,10 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     AI Speech Coach
   </div>
   <h1 class="hero-title">말하는 방식이 달라지면,<br><span class="muted">삶이 달라져요.</span></h1>
-  <p class="hero-sub">면접, 발표, 협상, 일상까지.<br>말하기의 모든 순간을 함께 연습해요.</p>
+  <p class="hero-sub">실시간 AI agent와 대화하며<br>말하기 습관을 바로 고쳐가요.</p>
   <div class="hero-btns">
-    <a class="btn-main" href="create-project.html">연습 시작하기<i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+    <a class="btn-main" href="create-project.html">세션 시작하기<i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+    <a class="btn-ghost" href="create-project.html?mode=existing">기존 세션으로 시작하기</a>
   </div>
 
   <div class="situations">
@@ -188,8 +189,8 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   <div class="features">
     <div class="feat">
       <div class="feat-icon"><i class="ti ti-file-analytics" aria-hidden="true"></i></div>
-      <div class="feat-title">리허설 리포트</div>
-      <div class="feat-desc">연습이 끝난 뒤 흐름을 정리해<br>차분하게 돌아볼 수 있어요.</div>
+      <div class="feat-title">AI agent 실시간 코칭</div>
+      <div class="feat-desc">시선, 자세, 말 속도를 보며<br>즉시 조언을 받아요.</div>
     </div>
     <div class="feat">
       <div class="feat-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></div>
@@ -212,12 +213,12 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     </div>
     <div class="modal-steps">
       <div class="modal-step">
-        <strong>1. 상황 선택</strong>
+        <strong>1. 세션 선택</strong>
         <p>발표, 면접, 대화 등 원하는 연습을 고릅니다.</p>
       </div>
       <div class="modal-step">
-        <strong>2. 영상 업로드 또는 녹화</strong>
-        <p>말하는 모습을 편하게 기록합니다.</p>
+        <strong>2. 실시간 세션 진행</strong>
+        <p>AI agent와 대화하며 바로 코칭을 받습니다.</p>
       </div>
       <div class="modal-step">
         <strong>3. AI 코칭 확인</strong>
@@ -225,14 +226,14 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
       </div>
     </div>
     <div class="modal-action">
-      <a class="btn-main" href="create-project.html">연습 시작하기<i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+      <a class="btn-main" href="create-project.html">세션 시작하기<i class="ti ti-arrow-right" aria-hidden="true"></i></a>
     </div>
   </div>
 </div>
 
 <script>
 const sitMeta={'발표':'오늘의 발표 연습 · 3회차','면접':'오늘의 면접 연습 · 5회차','협상':'오늘의 협상 연습 · 2회차','일상 대화':'오늘의 일상 대화 연습 · 1회차','전화·온라인':'오늘의 전화 연습 · 4회차','자유 연습':'오늘의 자유 연습 · 7회차'};
-const sitAI={'발표':'말의 흐름이 안정됐고 도입부에서 자신감이 느껴졌어요. 다음엔 답변 마무리를 좀 더 명확하게 끝내보세요.','면접':'자기소개 구간이 자연스럽게 흘렀어요. 다음엔 "이상입니다"로 답변을 명확하게 끝내보세요.','협상':'논리 흐름은 탄탄했어요. 설득 구간에서 말 속도가 빨라졌으니 다음엔 여유 있게 가보세요.','일상 대화':'첫 인상이 따뜻하게 느껴졌어요. 필러 표현이 조금 있었는데 잠깐 멈추는 연습을 해보세요.','전화·온라인':'목소리 볼륨이 안정적이었어요. 비대면에선 더 또렷하게 첫 마디를 시작해보세요.','자유 연습':'전반적으로 말이 유려하게 흘렀어요. 다음엔 특정 상황을 정해서 집중 연습해보세요.'};
+const sitAI={'발표':'말의 흐름이 안정됐고 도입부에서 자신감이 느껴졌어요. 다음엔 답변 마무리를 좀 더 명확하게 끝내보세요.','면접':'자기소개 구간이 자연스럽게 흘렀어요. 다음엔 "이상입니다"로 답변을 명확하게 끝내보세요.','협상':'논리 흐름은 탄탄했어요. 설득 구간에서 말 속도가 빨라졌으니 다음엔 여유 있게 가보세요.','일상 대화':'첫 인상이 따뜻하게 느껴졌어요. 필러 표현이 조금 있었는데 잠깐 멈추는 연습을 해보세요.','전화·온라인':'목소리 볼륨이 안정적이었어요. 비대면에선 더 또렷하게 첫 마디를 시작해보세요.','자유 연습':'전반적으로 말이 유려하게 흘렀어요. 다음엔 연습 목적을 정해서 집중해보세요.'};
 function selectSit(el){
   document.querySelectorAll('.sit-chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
