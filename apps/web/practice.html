@@ -144,6 +144,7 @@
       const project = params.get('project') || '오늘의 말하기 연습';
       const goal = params.get('goal') || '말 속도';
       const type = params.get('type') || 'free';
+      const situation = params.get('situation') || localStorage.getItem('speakup-practice-situation') || '';
       const typeLabel = {
         presentation: '발표',
         interview: '면접',
@@ -156,7 +157,7 @@
       };
       document.getElementById('page-title').textContent = project;
       document.getElementById('goal-summary').textContent = goal || '—';
-      document.getElementById('session-type').textContent = typeLabel[type] || '자유 연습';
+      document.getElementById('session-type').textContent = situation || typeLabel[type] || '자유 연습';
 
       function syncThemeToggle() {
         const theme = document.documentElement.dataset.theme || 'light';

@@ -162,6 +162,7 @@ async function run() {
       project: pending.project,
       goal: pending.goal,
       type: pending.type,
+      situation: pending.situation,
       source: pending.source,
       createdAt: pending.createdAt,
       report,

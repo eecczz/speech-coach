@@ -44,48 +44,8 @@
           </div>
 
           <div class="field">
-            <label for="presentation-type">연습 상황</label>
-            <select id="presentation-type" class="sr-select">
-              <option value="presentation">발표</option>
-              <option value="interview">면접</option>
-              <option value="negotiation">협상</option>
-              <option value="persuasion">설득</option>
-              <option value="daily">일상 대화</option>
-              <option value="phone">전화</option>
-              <option value="online">온라인</option>
-              <option value="free">자유 연습</option>
-            </select>
-            <div class="scenario-grid" data-scenario-grid>
-              <button type="button" class="scenario-card is-selected" data-value="presentation">
-                <i class="ti ti-presentation"></i><strong>발표</strong><span>청중 앞에서 말하는 흐름</span>
-              </button>
-              <button type="button" class="scenario-card" data-value="interview">
-                <i class="ti ti-briefcase"></i><strong>면접</strong><span>질문에 답하는 자신감</span>
-              </button>
-              <button type="button" class="scenario-card" data-value="negotiation">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M11 12 6.5 7.5a2.12 2.12 0 0 0-3 3l4.9 4.9a2.12 2.12 0 0 0 3 0" />
-                  <path d="m13 12 4.5-4.5a2.12 2.12 0 1 1 3 3l-4.9 4.9a2.12 2.12 0 0 1-3 0" />
-                  <path d="m8 11 2 2" />
-                  <path d="m14 11 2 2" />
-                </svg><strong>협상</strong><span>근거와 톤의 균형</span>
-              </button>
-              <button type="button" class="scenario-card" data-value="persuasion">
-                <i class="ti ti-target"></i><strong>설득</strong><span>핵심 메시지 전달</span>
-              </button>
-              <button type="button" class="scenario-card" data-value="daily">
-                <i class="ti ti-message-circle"></i><strong>일상 대화</strong><span>편안한 대화 습관</span>
-              </button>
-              <button type="button" class="scenario-card" data-value="phone">
-                <i class="ti ti-phone"></i><strong>전화</strong><span>목소리만으로 전달하기</span>
-              </button>
-              <button type="button" class="scenario-card" data-value="online">
-                <i class="ti ti-device-laptop"></i><strong>온라인</strong><span>화면 너머의 집중감</span>
-              </button>
-              <button type="button" class="scenario-card" data-value="free">
-                <i class="ti ti-sparkles"></i><strong>자유 연습</strong><span>오늘 떠오른 말 연습</span>
-              </button>
-            </div>
+            <label for="practice-situation">어떤 상황을 연습하고 싶나요?</label>
+            <input id="practice-situation" type="text" />
           </div>
 
           <div class="field">
@@ -110,7 +70,7 @@
             <h2>세션 요약</h2>
             <dl>
               <div><dt>이름</dt><dd data-summary-name>—</dd></div>
-              <div><dt>상황</dt><dd data-summary-type>발표</dd></div>
+              <div><dt>상황</dt><dd data-summary-type>—</dd></div>
               <div><dt>포커스</dt><dd data-summary-focus>—</dd></div>
               <div><dt>예상 시간</dt><dd>5분</dd></div>
             </dl>
@@ -127,41 +87,31 @@
       const themeToggle = document.querySelector('[data-theme-toggle]');
       const focusChipGroup = document.getElementById('focus-chip-group');
       const projectName = document.getElementById('project-name');
-      const typeSelect = document.getElementById('presentation-type');
+      const situationInput = document.getElementById('practice-situation');
       const summaryName = document.querySelector('[data-summary-name]');
       const summaryType = document.querySelector('[data-summary-type]');
       const summaryFocus = document.querySelector('[data-summary-focus]');
       const tip = document.querySelector('[data-tip]');
-      const scenarioLabel = {
-        presentation: '발표',
-        interview: '면접',
-        negotiation: '협상',
-        persuasion: '설득',
-        daily: '일상 대화',
-        phone: '전화',
-        online: '온라인',
-        free: '자유 연습',
-      };
-      const tips = {
-        presentation: '첫 문장은 조금 느리게 시작해보세요. 청중이 리듬을 따라오기 쉬워져요.',
-        interview: '답변은 결론을 먼저 말하고, 이유를 짧게 붙이면 안정적으로 들려요.',
-        negotiation: '상대가 들을 수 있는 속도로 근거를 하나씩 놓아보세요.',
-        persuasion: '핵심 메시지를 한 문장으로 반복하면 설득력이 좋아져요.',
-        daily: '문장 끝을 조금 부드럽게 내려보세요. 대화가 더 편안해져요.',
-        phone: '표정이 목소리에 묻어나요. 살짝 웃고 말해보세요.',
-        online: '카메라를 보는 순간을 의식적으로 조금 늘려보세요.',
-        free: '오늘 고치고 싶은 습관 하나만 정해도 충분해요.',
-      };
-      const scenarioValue = {
-        presentation: 'presentation',
-        interview: 'interview',
-        negotiation: 'presentation',
-        persuasion: 'presentation',
-        daily: 'casual',
-        phone: 'customer_service',
-        online: 'presentation',
-        free: 'presentation',
-      };
+      const situationExamples = [
+        '캡스톤 최종 발표',
+        '창업 경진대회 발표',
+        '교수님 면담',
+        '대기업 면접',
+      ];
+      const savedSituation = localStorage.getItem('speakup-practice-situation') || '';
+      const tips = [
+        '상황이 구체적일수록 더 자연스럽게 연습 방향을 잡을 수 있어요.',
+        '실제 말하게 될 장면을 떠올리며 입력하면 리허설이 더 편해져요.',
+        '오늘 가장 가까운 말하기 장면 하나만 적어도 충분해요.',
+        '청중이나 상대방이 누구인지 떠올리며 적어보세요.',
+      ];
+
+      if (!savedSituation) {
+        const randomExample = situationExamples[Math.floor(Math.random() * situationExamples.length)];
+        situationInput.placeholder = randomExample;
+      } else {
+        situationInput.value = savedSituation;
+      }
 
       function syncThemeToggle() {
         const theme = document.documentElement.dataset.theme || 'light';
@@ -189,32 +139,25 @@
       }
 
       function updateSummary() {
-        const selectedType = typeSelect.value;
         const focus = getSelectedFocus();
         summaryName.textContent = projectName.value.trim() || '—';
-        summaryType.textContent = scenarioLabel[selectedType] || '자유 연습';
+        summaryType.textContent = situationInput.value.trim() || '—';
         summaryFocus.textContent = focus.length ? focus.join(', ') : '—';
-        tip.textContent = tips[selectedType] || tips.free;
+        tip.textContent = tips[Math.floor(Math.random() * tips.length)];
+        localStorage.setItem('speakup-practice-situation', situationInput.value.trim());
       }
 
-      document.querySelectorAll('[data-scenario-grid] .scenario-card').forEach((card) => {
-        card.addEventListener('click', () => {
-          document.querySelectorAll('.scenario-card').forEach((el) => el.classList.remove('is-selected'));
-          card.classList.add('is-selected');
-          typeSelect.value = card.dataset.value;
-          updateSummary();
-        });
-      });
-
       projectName.addEventListener('input', updateSummary);
+      situationInput.addEventListener('input', updateSummary);
       focusChipGroup.addEventListener('change', renderSelectedFocus);
 
       document.getElementById('btn-go').addEventListener('click', () => {
         const name = encodeURIComponent(projectName.value.trim() || '오늘의 말하기 연습');
-        const type = encodeURIComponent(typeSelect.value || 'free');
-        const scenario = encodeURIComponent(scenarioValue[typeSelect.value] || 'presentation');
+        const situation = situationInput.value.trim() || situationInput.placeholder || '자유 연습';
+        localStorage.setItem('speakup-practice-situation', situation);
+        const scenario = encodeURIComponent('presentation');
         const goal = encodeURIComponent(getSelectedFocus().join(', ') || '말 속도');
-        location.href = `practice.html?project=${name}&type=${type}&scenario=${scenario}&goal=${goal}`;
+        location.href = `practice.html?project=${name}&type=free&scenario=${scenario}&situation=${encodeURIComponent(situation)}&goal=${goal}`;
       });
 
       syncThemeToggle();

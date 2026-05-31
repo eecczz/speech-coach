@@ -38,6 +38,7 @@ const focusAxes = {
 const params = new URLSearchParams(location.search);
 const projectName = params.get('project') || '오늘의 말하기 연습';
 const typeName = params.get('type') || 'free';
+const situationName = params.get('situation') || localStorage.getItem('speakup-practice-situation') || '';
 const goals = (params.get('goal') || '말 속도')
   .split(',')
   .map((item) => item.trim())
@@ -282,7 +283,7 @@ async function bootstrap() {
   let lastProsodySendT = 0;
   let silenceDetector: SilenceDetector | null = null;
   let sessionId = '';
-  const scenario = SCENARIO_MAP[typeName] || 'presentation';
+  const scenario = params.get('scenario') || SCENARIO_MAP[typeName] || 'presentation';
 
   await hudClient.connect((payload) => {
     syncHudFromResponse(payload, recording);
@@ -332,6 +333,7 @@ async function bootstrap() {
         project: projectName,
         goal: goals,
         type: typeName,
+        situation: situationName,
         source: 'live',
         createdAt: new Date().toISOString(),
         mediaId,
@@ -345,6 +347,7 @@ async function bootstrap() {
       next.searchParams.set('project', projectName);
       next.searchParams.set('goal', goals.join(', '));
       next.searchParams.set('type', typeName);
+      if (situationName) next.searchParams.set('situation', situationName);
       location.href = next.toString();
     } catch (e) {
       console.error('[practice] failed to hand off live analysis', e);
@@ -368,6 +371,7 @@ async function bootstrap() {
         project: projectName,
         goal: goals,
         type: typeName,
+        situation: situationName,
         source: 'upload',
         createdAt: new Date().toISOString(),
         mediaId,
@@ -381,6 +385,7 @@ async function bootstrap() {
       next.searchParams.set('project', projectName);
       next.searchParams.set('goal', goals.join(', '));
       next.searchParams.set('type', typeName);
+      if (situationName) next.searchParams.set('situation', situationName);
       location.href = next.toString();
     } catch (e) {
       console.error('[practice] failed to queue uploaded analysis', e);

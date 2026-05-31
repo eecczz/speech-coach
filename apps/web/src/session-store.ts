@@ -11,6 +11,7 @@ export interface SessionMeta {
   project: string;
   goal: string[];
   type: string;
+  situation?: string;
   source: 'live' | 'upload';
   createdAt: string;
 }

@@ -353,7 +353,12 @@ async function render() {
     summaryEl.textContent = session.report.overall_summary || '이번 연습의 종합 코칭이 여기에 표시됩니다.';
   }
   if (retryLink) {
-    retryLink.href = `practice.html?project=${encodeURIComponent(session.project)}&goal=${encodeURIComponent(goalText)}&type=${encodeURIComponent(session.type)}`;
+    const next = new URL('practice.html', location.href);
+    next.searchParams.set('project', session.project);
+    next.searchParams.set('goal', goalText);
+    next.searchParams.set('type', session.type);
+    if (session.situation) next.searchParams.set('situation', session.situation);
+    retryLink.href = next.toString();
   }
 
   setAxisCard(
