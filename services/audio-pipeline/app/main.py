@@ -16,8 +16,9 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 
 from prosody import analyze_prosody
 from stt import STT
@@ -42,6 +43,36 @@ def _webm_to_wav(src: str, dst: str) -> None:
         ["ffmpeg", "-y", "-i", src, "-ar", "16000", "-ac", "1", dst],
         check=True, capture_output=True,
     )
+
+
+def _video_to_mp4(src: str, dst: str) -> None:
+    """Convert a browser-recorded video into a broadly shareable MP4 file."""
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            src,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+            dst,
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def _safe_download_stem(filename: str | None) -> str:
+    stem = Path(filename or "speakup-video").stem.strip() or "speakup-video"
+    return "".join("_" if c in '\\/:*?"<>|' else c for c in stem)
 
 
 def _to_stt_segments(whisper_segments: list) -> list[dict]:
@@ -86,6 +117,44 @@ async def transcribe(audio: UploadFile = File(...), language: str = "ko"):
             os.unlink(path)
         except OSError:
             pass
+
+
+@app.post("/convert/mp4")
+async def convert_mp4(video: UploadFile = File(...)):
+    """Convert a stored practice video to MP4 for easier sharing/download."""
+    suffix = Path(video.filename or "rec.webm").suffix or ".webm"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as src_tmp:
+        src_tmp.write(await video.read())
+        src_path = src_tmp.name
+    mp4_path = src_path + ".mp4"
+
+    def cleanup() -> None:
+        for p in (src_path, mp4_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+    try:
+        _video_to_mp4(src_path, mp4_path)
+        return FileResponse(
+            mp4_path,
+            media_type="video/mp4",
+            filename=f"{_safe_download_stem(video.filename)}.mp4",
+            background=BackgroundTask(cleanup),
+        )
+    except subprocess.CalledProcessError as e:
+        cleanup()
+        return JSONResponse(
+            {"error": f"ffmpeg failed: {e.stderr.decode(errors='ignore')[:500]}"},
+            status_code=400,
+        )
+    except Exception as e:
+        cleanup()
+        return JSONResponse(
+            {"error": f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
 
 
 @app.post("/analyze")
